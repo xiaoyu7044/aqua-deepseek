@@ -367,9 +367,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
     dead: false, color: '#e6edf3', belly: null, fin: null, tail: null, stripe: null, highlight: null, eyeColor: '#000', deadColor: '#6e7681',
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
-    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false
+    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false, flopT: 0, flopDir: 1
   };
-  var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255';
+  var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255', aridF = 0;
   var lastFishPeak = null, aqRaf = null;
 
   // ---- 彩蛋系统 ----（开久了偶尔触发：捕食者吃鱼 / 多条同伴鱼 / 鱼跃出水）
@@ -519,6 +519,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       var f = fx[i]; f.age++;
       f.x += f.vx; f.y += f.vy;
       if (f.type === 'heart') { f.x += Math.sin(t + f.age * 0.1) * 0.2; }
+      if (f.type === 'weed') { f.y = AQ_H - 8 + Math.sin(t * 2.2 + f.ph) * 2; }   // 风滚草滚动起伏
+      if (f.type === 'snake' || f.type === 'lizard') { f.y = AQ_H - 5 + Math.sin(t * 3 + f.ph) * 1; }
       if (f.age > f.life || f.x < -40 || f.x > AQ_W + 40) fx.splice(i, 1);
     }
     if (fishFx.golden > 0) fishFx.golden--;
@@ -527,10 +529,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (scene.current > 0) scene.current--;
     if (scene.drip > 0) scene.drip--;
     if (scene.dust > 0) scene.dust--;
+    if (scene.wind > 0) scene.wind--;
+    if (scene.scorch > 0) scene.scorch--;
   }
 
   // 手动/自动共用的彩蛋触发器：随机抽一个彩蛋执行
   function triggerEgg() {
+    if (aridF > 0.5) { triggerAridEgg(); return; }   // 干旱主题（高峰没水）用干旱彩蛋库
     var r = Math.random();
     if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
     else if (r < 0.14 && !fish.dead && extraFish.length === 0) spawnCompanions(); // 2 同伴鱼
@@ -551,6 +556,146 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     else if (r < 0.94) scene.drip = 240;                         // 17 玻璃水珠滑落
     else if (r < 0.98) scene.dust = 200;                         // 18 尘埃风暴
     else if (!fish.dead) spawnHeart();                           // 兜底
+  }
+  // ===== 干旱主题彩蛋库（高峰没水，≥20 种）=====
+  function triggerAridEgg() {
+    var r = Math.random();
+    if (r < 0.05) spawnTumbleweed();                     // 1 风滚草
+    else if (r < 0.10) spawnCactus();                    // 2 仙人掌
+    else if (r < 0.145) spawnVulture();                  // 3 秃鹫剪影
+    else if (r < 0.185) spawnLightning();                // 4 闪电
+    else if (r < 0.23) spawnSand();                      // 5 沙尘风暴
+    else if (r < 0.275) spawnDrygrass();                 // 6 枯草
+    else if (r < 0.32) spawnCrack();                     // 7 龟裂蔓延
+    else if (r < 0.365) spawnLizard();                   // 8 蜥蜴
+    else if (r < 0.41) spawnSnake();                     // 9 响尾蛇
+    else if (r < 0.455) spawnDeadtree();                 // 10 枯树
+    else if (r < 0.50) scene.wind = 170;                 // 11 风沙线条
+    else if (r < 0.545) spawnHeatwave();                 // 12 热浪波纹
+    else if (r < 0.59) spawnMirage();                    // 13 海市蜃楼
+    else if (r < 0.635) spawnBone();                     // 14 鱼骨
+    else if (r < 0.68) spawnSnail();                     // 15 蜗牛
+    else if (r < 0.715) spawnSunburst();                 // 16 烈日强光
+    else if (r < 0.755) spawnLongshadow();               // 17 影子拖长
+    else if (r < 0.795) spawnDune();                     // 18 沙丘移位
+    else if (r < 0.835) spawnAridbub();                  // 19 干涸冒泡
+    else if (r < 0.875) spawnHeatdust();                 // 20 热尘埃
+    else if (r < 0.915) scene.scorch = 70;               // 21 灼热滤镜
+    else if (r < 0.96) spawnSand();                      // 22 沙尘
+    else spawnTumbleweed();                              // 兜底
+  }
+  function spawnTumbleweed() { var l = Math.random() < 0.5; spawnFx('weed', { x: l ? -8 : AQ_W + 8, y: AQ_H - 8, vx: l ? 0.7 : -0.7, dir: l ? 1 : -1, life: 620, ph: Math.random() * 6.28 }); }
+  function spawnCactus() { spawnFx('cactus', { x: 14 + Math.random() * (AQ_W - 30), y: AQ_H - 5, life: 540, ph: Math.random() * 6.28 }); }
+  function spawnVulture() { var l = Math.random() < 0.5; spawnFx('vulture', { x: l ? -16 : AQ_W + 16, y: 10 + Math.random() * 14, vx: l ? 0.9 : -0.9, dir: l ? 1 : -1, life: 540 }); }
+  function spawnLightning() { spawnFx('lightning', { x: 18 + Math.random() * (AQ_W - 36), life: 22 }); }
+  function spawnSand() { spawnFx('sand', { life: 220 }); }
+  function spawnDrygrass() { spawnFx('drygrass', { x: 10 + Math.random() * (AQ_W - 20), y: AQ_H - 4, life: 430, ph: Math.random() * 6.28 }); }
+  function spawnCrack() { spawnFx('crack', { x: 22 + Math.random() * (AQ_W - 46), y: AQ_H - 3, life: 380, ph: Math.random() * 6.28 }); }
+  function spawnLizard() { var l = Math.random() < 0.5; spawnFx('lizard', { x: l ? -8 : AQ_W + 8, y: AQ_H - 6, vx: l ? 1.1 : -1.1, dir: l ? 1 : -1, life: 340 }); }
+  function spawnSnake() { var l = Math.random() < 0.5; spawnFx('snake', { x: l ? -10 : AQ_W + 10, y: AQ_H - 5, vx: l ? 0.55 : -0.55, dir: l ? 1 : -1, life: 520, ph: Math.random() * 6.28 }); }
+  function spawnDeadtree() { spawnFx('deadtree', { x: 14 + Math.random() * (AQ_W - 30), y: AQ_H - 6, life: 620, ph: Math.random() * 6.28 }); }
+  function spawnHeatwave() { spawnFx('heat', { life: 300, ph: Math.random() * 6.28 }); }
+  function spawnMirage() { spawnFx('mirage', { x: 20 + Math.random() * (AQ_W - 40), life: 400, ph: Math.random() * 6.28 }); }
+  function spawnBone() { spawnFx('bone', { x: 14 + Math.random() * (AQ_W - 28), y: AQ_H - 4, life: 360 }); }
+  function spawnSnail() { var l = Math.random() < 0.5; spawnFx('snail', { x: l ? -8 : AQ_W + 8, y: AQ_H - 5, vx: l ? 0.12 : -0.12, dir: l ? 1 : -1, life: 820 }); }
+  function spawnSunburst() { spawnFx('sun', { life: 40 }); }
+  function spawnLongshadow() { spawnFx('dshadow', { life: 220 }); }
+  function spawnDune() { spawnFx('dune', { life: 380, ph: Math.random() * 6.28 }); }
+  function spawnAridbub() { spawnFx('bub', { x: 20 + Math.random() * (AQ_W - 40), y: AQ_H - 6, life: 150 }); }
+  function spawnHeatdust() { spawnFx('dust2', { life: 210 }); }
+  // 干旱 fx 绘制
+  function drawAridFx(ctx, f, t) {
+    var ty = f.type;
+    if (ty === 'weed') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = '#c9a45a'; ctx.fillRect(-3, -3, 6, 6); ctx.fillRect(-2, -4, 4, 2); ctx.fillRect(-2, 2, 4, 2);
+      ctx.fillRect(-4, -2, 2, 4); ctx.fillRect(2, -2, 2, 4);
+      ctx.fillStyle = '#8a6f3a'; ctx.fillRect(1 - 1, -1, 2, 2);
+      ctx.restore();
+    } else if (ty === 'cactus') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = '#3f7d43'; ctx.fillRect(-1, -11, 3, 11); ctx.fillRect(-4, -8, 3, 5); ctx.fillRect(2, -9, 3, 5);
+      ctx.fillStyle = '#5aa25a'; ctx.fillRect(-1, -13, 3, 2);
+      ctx.restore();
+    } else if (ty === 'vulture') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+      ctx.fillStyle = 'rgba(40,30,20,0.85)';
+      ctx.fillRect(-2, -1, 4, 2); ctx.fillRect(1, -2, 3, 2);
+      var flap = Math.sin(t * 6) * 2;
+      ctx.fillRect(-6, -3 - flap, 5, 1); ctx.fillRect(3, -3 + flap, 4, 1);
+      ctx.restore();
+    } else if (ty === 'lightning') {
+      ctx.strokeStyle = 'rgba(255,240,160,' + (f.age < 8 ? 0.9 : 0.4) + ')'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(f.x + 4, 0); ctx.lineTo(f.x, 8); ctx.lineTo(f.x + 3, 10); ctx.lineTo(f.x - 2, 20); ctx.stroke();
+    } else if (ty === 'sand') {
+      for (var s2 = 0; s2 < 22; s2++) {
+        var sx = ((t * 1.3 + s2 * 9) % (AQ_W + 24)) - 12, sy = 10 + ((s2 * 31) % (AQ_H - 14));
+        ctx.fillStyle = 'rgba(200,168,110,' + (0.25 + (s2 % 3) * 0.12) + ')';
+        ctx.fillRect(Math.round(sx + Math.sin(t + s2) * 2), Math.round(sy), 3, 2);
+      }
+    } else if (ty === 'drygrass') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = '#c8b060';
+      for (var g2 = 0; g2 < 3; g2++) ctx.fillRect(-4 + g2 * 3, -6 - Math.sin(t * 2 + f.ph + g2) * 2, 2, 7);
+      ctx.restore();
+    } else if (ty === 'crack') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.strokeStyle = 'rgba(90,60,30,0.7)'; ctx.lineWidth = 1; ctx.beginPath();
+      var grow = Math.min(1, f.age / 40);
+      ctx.moveTo(0, 0); ctx.lineTo(6 * grow, -2); ctx.lineTo(11 * grow, 0); ctx.lineTo(15 * grow, -3); ctx.lineTo(4 * grow, 5); ctx.stroke();
+      ctx.restore();
+    } else if (ty === 'lizard') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+      ctx.fillStyle = '#9a7f3e'; ctx.fillRect(-4, -2, 8, 3); ctx.fillRect(-7, -1, 3, 2); ctx.fillRect(3, -2, 4, 2);
+      ctx.fillStyle = '#000'; ctx.fillRect(5, -2, 2, 2);
+      ctx.restore();
+    } else if (ty === 'snake') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+      ctx.fillStyle = '#a97a3c';
+      for (var sn = 0; sn < 5; sn++) ctx.fillRect(-8 + sn * 4, Math.sin(t * 3 + sn) * 1.5, 3, 3);
+      ctx.fillStyle = '#000'; ctx.fillRect(8, -2, 2, 2);
+      ctx.restore();
+    } else if (ty === 'deadtree') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = '#5a4630'; ctx.fillRect(-1, -14, 3, 14); ctx.fillRect(-4, -12, 3, 2); ctx.fillRect(-6, -15, 3, 2); ctx.fillRect(2, -13, 3, 2); ctx.fillRect(4, -16, 2, 2);
+      ctx.restore();
+    } else if (ty === 'heat') {
+      for (var h2 = 0; h2 < 5; h2++) {
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.fillRect(Math.round(14 + h2 * 28), Math.round(14 + Math.sin(t * 3 + f.ph + h2 * 1.2) * 4 + h2 * 6), 22, 3);
+      }
+    } else if (ty === 'mirage') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = 'rgba(120,180,220,0.25)'; ctx.fillRect(0, -6, 34, 3);
+      ctx.fillStyle = 'rgba(120,180,220,0.12)'; ctx.fillRect(2, -8, 30, 2);
+      ctx.restore();
+    } else if (ty === 'bone') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+      ctx.fillStyle = '#e0d8c8'; ctx.fillRect(-5, -2, 12, 3); ctx.fillRect(-7, -3, 3, 6); ctx.fillRect(6, -3, 3, 6);
+      ctx.restore();
+    } else if (ty === 'snail') {
+      ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+      ctx.fillStyle = '#b08a52'; ctx.fillRect(-2, -3, 5, 4); ctx.fillRect(3, -1, 2, 3); ctx.fillRect(1, -2, 4, 3);
+      ctx.fillStyle = '#7a6238'; ctx.fillRect(-1, -3, 3, 2);
+      ctx.restore();
+    } else if (ty === 'sun') {
+      ctx.fillStyle = 'rgba(255,230,150,' + (f.age < 12 ? 0.28 : 0.1) + ')'; ctx.fillRect(0, 0, AQ_W, AQ_H);
+    } else if (ty === 'dshadow') {
+      ctx.fillStyle = 'rgba(60,40,20,0.25)'; ctx.fillRect(6, AQ_H - 4, AQ_W - 12, 2);
+    } else if (ty === 'dune') {
+      ctx.fillStyle = 'rgba(150,110,58,' + (0.25 + Math.sin(t * 0.5 + f.ph) * 0.08) + ')';
+      ctx.beginPath(); ctx.moveTo(0, AQ_H - 3);
+      for (var dn = 0; dn <= AQ_W; dn += 12) ctx.lineTo(dn, AQ_H - 4 - Math.sin(dn * 0.06 + f.ph) * 2);
+      ctx.lineTo(AQ_W, AQ_H); ctx.lineTo(0, AQ_H); ctx.closePath(); ctx.fill();
+    } else if (ty === 'bub') {
+      ctx.fillStyle = 'rgba(220,190,120,0.5)';
+      ctx.fillRect(Math.round(f.x), Math.round(f.y - f.age * 0.2), 2, 2);
+    } else if (ty === 'dust2') {
+      for (var d3 = 0; d3 < 16; d3++) {
+        ctx.fillStyle = 'rgba(200,168,110,' + (0.2 + (d3 % 3) * 0.1) + ')';
+        ctx.fillRect(Math.round(4 + (d3 * 11 + t * 18) % (AQ_W - 8)), Math.round(8 + ((d3 * 37) % (AQ_H - 16)) + Math.sin(t + d3) * 2), 2, 2);
+      }
+    }
   }
 
   function updateEggs(t, waterTop) {
@@ -767,14 +912,16 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (mouthOpen) ctx.fillRect(11, -2, 2, 2); else ctx.fillRect(11, -1, 2, 1);
     ctx.restore();
   }
-  function drawDeadFish(ctx, x, y, color, flip) {
-    ctx.save(); ctx.translate(Math.round(x), Math.round(y));
+  function drawDeadFish(ctx, x, y, color, flip, flopY) {
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y + (flopY || 0)));
     ctx.scale(1, 1 - flip * 2);
     ctx.globalAlpha = flip < 0.5 ? 0.6 + flip * 0.8 : 1;
     ctx.fillStyle = color;
     ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 10, 7);
     ctx.fillRect(-4, -4, 7, 8); ctx.fillRect(-10, -1, 3, 3);
     ctx.fillStyle = '#000'; ctx.fillRect(3, -2, 2, 2); ctx.fillRect(5, 0, 2, 2);
+    // 蹦跶时尾巴抽动一下
+    if (flopY) { ctx.fillStyle = color; ctx.fillRect(-11, -1 + (flopY > 1 ? 1 : -1), 2, 2); }
     ctx.globalAlpha = 1; ctx.restore();
   }
   function drawBubble(ctx, x, y, r, alpha, color) {
@@ -790,23 +937,33 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
+  // 颜色插值（hexA→hexB，f: 0..1）用于干旱水草枯黄过渡
+  function mixHex(a, b, f) {
+    if (!a || a.charAt(0) !== '#') return a;
+    var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    var r = Math.round(((pa >> 16) & 255) * (1 - f) + ((pb >> 16) & 255) * f);
+    var g = Math.round(((pa >> 8) & 255) * (1 - f) + ((pb >> 8) & 255) * f);
+    var bl = Math.round((pa & 255) * (1 - f) + (pb & 255) * f);
+    return 'rgb(' + r + ',' + g + ',' + bl + ')';
+  }
   function drawSeaweed(ctx, plant, waterTop, t, surge) {
-    // 背景化：暗绿 + 低透明度 + 微摆 + 矮，不抢主角鱼视线
+    // 背景化：暗绿 + 低透明度 + 微摆 + 矮；干旱时随 aridF 渐枯黄、少摆（平滑切换）
     if (!surge) surge = 1;
-    ctx.globalAlpha = 0.5;
+    var ar = aridF || 0;
+    ctx.globalAlpha = 0.5 * (1 - ar * 0.4);
     for (var s = 0; s < plant.stems; s++) {
       var bx = plant.x + s * 3 - 1, py = AQ_H - 1;
       var len = plant.h * (1 - s * 0.2);
       if (len < 7) len = 7;
       for (var seg = 0; seg < len; seg += 3) {
         if (py - 3 < waterTop + 3) break;   // 只在水下生长
-        var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * (plant.sw || 1) * surge; // 微摆，后景摆幅更小
-        ctx.fillStyle = (seg % 4 < 2) ? plant.col : '#143629';
+        var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * (plant.sw || 1) * surge * (1 - ar * 0.7);
+        ctx.fillStyle = (seg % 4 < 2) ? mixHex(plant.col, '#c8a95c', ar) : mixHex('#143629', '#8a6f3a', ar);
         ctx.fillRect(Math.round(bx + sway), py, 3, 3);
         py -= 2;
       }
-      ctx.fillStyle = plant.col;
-      ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * (plant.sw || 1) * surge) - 1, py, 4, 2); // 顶叶
+      ctx.fillStyle = mixHex(plant.col, '#c8a95c', ar);
+      ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * (plant.sw || 1) * surge * (1 - ar * 0.7)) - 1, py, 4, 2); // 顶叶
     }
     ctx.globalAlpha = 1;
   }
@@ -969,6 +1126,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       fish.speed = 0.35 + waterNow * 0.7;
     }
 
+    // === 1.5 死鱼偶尔蹦跶（回光返照，高峰没水时更生动）===
+    if (fish.dead && fish.state === 'dead') {
+      if (fish.flopT > 0) fish.flopT--;
+      else if (Math.random() < 0.006) { fish.flopT = 22; fish.flopDir = Math.random() < 0.5 ? 1 : -1; }
+    }
+
     // === 1.5 彩蛋 ===
     updateEggs(t, waterTop);
 
@@ -1035,6 +1198,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
     // === 6. 水位缓动 ===
     waterNow += (waterTarget - waterNow) * 0.04;
+    // 干旱度：水干→干旱，随水位平滑过渡（切换不生硬）
+    aridF += ((waterNow < 0.08 ? 1 : 0) - aridF) * 0.045;
+    if (aridF < 0.001) aridF = 0; if (aridF > 0.999) aridF = 1;
 
     // === 7. 绘制 ===
     aqCtx.clearRect(0, 0, AQ_W, AQ_H);
@@ -1047,6 +1213,40 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       aqCtx.fillRect(Math.round(gp.x), Math.round(gp.y), gp.sz, gp.sz);
     }
     aqCtx.globalAlpha = 1;
+
+    // === 干旱背景（水位低时随 aridF 平滑浮现，切换不生硬）===
+    if (aridF > 0.05) {
+      var ar = aridF;
+      var aGrad = aqCtx.createLinearGradient(0, AQ_H - 14, 0, AQ_H);
+      aGrad.addColorStop(0, 'rgba(158,116,62,' + (0.5 * ar) + ')');
+      aGrad.addColorStop(1, 'rgba(122,90,48,' + (0.62 * ar) + ')');
+      aqCtx.fillStyle = aGrad; aqCtx.fillRect(0, AQ_H - 12, AQ_W, 12);
+      aqCtx.fillStyle = 'rgba(120,88,46,' + (0.45 * ar) + ')';
+      aqCtx.fillRect(Math.round(30 + Math.sin(t * 0.3) * 5), AQ_H - 5, 22, 3);
+      aqCtx.fillRect(Math.round(96 + Math.cos(t * 0.35) * 6), AQ_H - 6, 26, 3);
+      // 龟裂
+      aqCtx.strokeStyle = 'rgba(76,52,26,' + (0.5 * ar) + ')';
+      aqCtx.lineWidth = 1; aqCtx.beginPath();
+      for (var ck = 0; ck < 5; ck++) {
+        var cx0 = 10 + ck * 28 + Math.sin(t * 0.3 + ck) * 3;
+        aqCtx.moveTo(cx0, AQ_H - 4); aqCtx.lineTo(cx0 + 5, AQ_H - 9);
+        aqCtx.lineTo(cx0 + 11, AQ_H - 3); aqCtx.lineTo(cx0 + 17, AQ_H - 10);
+      }
+      aqCtx.stroke();
+      // 热浪光斑
+      aqCtx.fillStyle = 'rgba(255,214,140,' + (0.1 * ar) + ')';
+      aqCtx.fillRect(Math.round(18 + Math.sin(t * 0.5) * 7), 9, 32, 4);
+      aqCtx.fillRect(Math.round(78 + Math.cos(t * 0.4) * 9), 9, 26, 3);
+      // 风沙线条（scene.wind）
+      if (scene.wind > 0) {
+        for (var ws = 0; ws < 8; ws++) {
+          aqCtx.fillStyle = 'rgba(210,175,115,0.4)';
+          aqCtx.fillRect(Math.round(((t * 2 + ws * 22) % (AQ_W + 30)) - 15), Math.round(12 + ((ws * 23) % (AQ_H - 22))), 6, 1);
+        }
+      }
+      // 灼热滤镜（scene.scorch）
+      if (scene.scorch > 0) { aqCtx.fillStyle = 'rgba(255,180,80,' + (0.06 * scene.scorch / 70) + ')'; aqCtx.fillRect(0, 0, AQ_W, AQ_H); }
+    }
 
     var wh = AQ_H * waterNow;
     if (wh > 1) {
@@ -1164,13 +1364,15 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       else if (fxe.type === 'turtle') drawTurtle(aqCtx, fxe, t);
       else if (fxe.type === 'shadow') drawShadow(aqCtx, fxe);
       else if (fxe.type === 'squid') drawSquid(aqCtx, fxe, t);
+      else drawAridFx(aqCtx, fxe, t);
     }
     // 鱼（应用彩蛋 flags：金色 / 转圈）
     var drawColor = fish.color, drawDir = fish.dir;
     if (fishFx.golden > 0) drawColor = '#f6c945';
     if (fishFx.spin > 0) drawDir = (Math.floor(t * 6) % 2 === 0) ? fish.dir : -fish.dir;
     if (fish.dead || fish.state === 'dying') {
-      drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress);
+      var flopY = fish.flopT > 0 ? Math.round(fish.flopDir * Math.sin((22 - fish.flopT) * 1.3) * 3) : 0;
+      drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress, flopY);
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else if (!fish.eaten) {
