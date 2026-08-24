@@ -50,6 +50,11 @@ python3 scripts/fetch_pricing.py --out ds_price_config.json
 | ![谷哥](docs/preview-valley.png) | ![峰哥](docs/preview-peak.png) |
 | 蓝水满缸，白鱼欢快游动 | 水干鱼翻白肚，沉底等谷哥回来 |
 
+| 冬季主题 ❄️ | 秋季主题 🍂 |
+|:---:|:---:|
+| ![冬季](docs/preview-winter.png) | ![秋季](docs/preview-autumn.png) |
+| 冰蓝水 + 雪花飘落 | 琥珀水 + 落叶飘零 |
+
 | 面板展开 | 移动端 |
 |:---:|:---:|
 | ![面板](docs/preview-panel.png) | ![移动端](docs/preview-mobile.png) |
@@ -76,6 +81,29 @@ python3 scripts/fetch_pricing.py --out ds_price_config.json
 - 浮窗可拖动，**永远不超出窗口**，面板**不与浮窗重叠**
 - 跟随主站主题色（CSS 变量），支持明暗主题
 - 关闭后本次会话不再显示，重开浏览器恢复
+- 鱼会好奇靠近鼠标，受惊时冲刺逃走
+- 死亡时嘴里冒出最后的气泡，复活时气泡爆发+庆祝冲刺
+- 水中有尘埃微粒漂浮、顶部光束斜射、水面贴壁微微上弯（张力）
+
+## 主题系统
+
+内置 4 个主题，可通过 JS 或后端切换：
+
+```javascript
+// 页面级设置（在加载 widget 之前）
+window.__AQUA_THEME__ = 'winter';
+```
+
+| 主题 | 效果 | 鱼色 | 水色 | 装饰 |
+|---|---|---|---|---|
+| `default` | 默认 | 白色（跟随 --text） | 蓝色（跟随 --accent） | 无 |
+| `winter` | 冬季 | 冰白 | 冰蓝 | ❄️ 雪花飘落 |
+| `autumn` | 秋季 | 暖黄 | 琥珀 | 🍂 落叶飘零 |
+| `spring` | 春季 | 白色 | 浅蓝 | 🌸 樱花瓣 |
+
+后端配置也可指定主题：`ds_price_config.json` 中加 `"theme": "winter"` 字段。
+
+自定义主题：直接修改 `AQUA_THEMES` 对象（在 widget JS 中），支持 `fishColor`/`deadColor`/`waterRGB`/`decorations` 四个字段。`decorations` 数组支持 `'snow'`/`'leaves'`/`'petals'`，可扩展新的粒子效果。
 
 ## 自动更新价格（可选）
 
