@@ -365,10 +365,249 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
     dead: false, color: '#e6edf3', belly: '#a8b4c0', fin: '#8b949e', stripe: null, eyeColor: '#000', deadColor: '#6e7681',
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
-    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0
+    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false
   };
   var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255';
   var lastFishPeak = null, aqRaf = null;
+
+  // ---- 彩蛋系统 ----（开久了偶尔触发：捕食者吃鱼 / 多条同伴鱼 / 鱼跃出水）
+  var eggFrame = 0, eggCooldown = 300;
+  var predator = null, extraFish = [], jumping = false, jumpPhase = 0, jumpBaseY = 0;
+  var EGG_COLORS = ['#f0b429', '#5aa9e6', '#f2a6c2', '#9be564', '#c89bf0'];
+
+  function spawnPredator() {
+    var fromLeft = Math.random() < 0.5;
+    predator = {
+      x: fromLeft ? -18 : AQ_W + 18, y: 28 + Math.random() * 42,
+      tx: fish.x, ty: fish.y, dir: fromLeft ? 1 : -1,
+      speed: 2.6 + Math.random() * 0.5, color: fromLeft ? '#4a5a6a' : '#6a5a4a',
+      victim: false
+    };
+  }
+  function spawnCompanions() {
+    var n = 1 + (Math.random() < 0.5 ? 1 : 0);
+    for (var i = 0; i < n; i++) {
+      var fromLeft = Math.random() < 0.5;
+      extraFish.push({
+        x: fromLeft ? -8 : AQ_W + 8, y: 24 + Math.random() * 48,
+        tx: 16 + Math.random() * (AQ_W - 32), ty: 22 + Math.random() * 52,
+        dir: fromLeft ? 1 : -1, speed: 0.45 + Math.random() * 0.35,
+        tail: Math.random() * 3, age: 0, life: 800 + Math.floor(Math.random() * 500),
+        color: EGG_COLORS[Math.floor(Math.random() * EGG_COLORS.length)]
+      });
+    }
+  }
+  function startJump() { if (!fish.dead) { jumping = true; jumpPhase = 0; jumpBaseY = fish.y; } }
+
+  function drawPredator(ctx, pd) {
+    ctx.save(); ctx.translate(Math.round(pd.x), Math.round(pd.y)); ctx.scale(pd.dir, 1); ctx.scale(2.4, 2.4);
+    ctx.fillStyle = pd.color;
+    ctx.fillRect(-10, -2, 20, 6); ctx.fillRect(-8, -3, 12, 8); ctx.fillRect(-5, -6, 9, 11);
+    ctx.fillRect(-13, -2, 3, 3); ctx.fillRect(-13, 0, 3, 3);
+    // 张开的大嘴
+    ctx.fillStyle = '#111'; ctx.fillRect(9, -4, 4, 4); ctx.fillRect(9, 0, 4, 4);
+    // 尖牙
+    ctx.fillStyle = '#fff'; ctx.fillRect(8, -3, 1, 1); ctx.fillRect(8, 2, 1, 1); ctx.fillRect(10, -3, 1, 1); ctx.fillRect(10, 2, 1, 1);
+    // 眼
+    ctx.fillStyle = '#000'; ctx.fillRect(4, -3, 2, 2); ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
+    ctx.restore();
+  }
+  function drawExtraFish(ctx, ef) {
+    ctx.save(); ctx.translate(Math.round(ef.x), Math.round(ef.y)); ctx.scale(ef.dir, 1); ctx.scale(0.7, 0.7);
+    ctx.fillStyle = ef.color;
+    ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 9, 7); ctx.fillRect(-4, -4, 6, 8);
+    ctx.fillRect(-11, -1, 3, 3); ctx.fillRect(-11, 1, 3, 3);
+    ctx.fillRect(-1, -6, 3, 2); ctx.fillRect(2, 3, 2, 2);
+    ctx.fillStyle = '#111'; ctx.fillRect(4, -3, 2, 2); ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
+    ctx.restore();
+  }
+
+  // ---- 彩蛋：特效实体（fx）+ 场景标志 ----
+  var fx = [];
+  var scene = { light: 0, current: 0, drip: 0, dust: 0 };
+  var fishFx = { golden: 0, spin: 0 };
+
+  function spawnFx(type, opts) {
+    var f = { type: type, age: 0, life: 600, x: 0, y: 0, vx: 0, vy: 0, dir: 1 };
+    if (opts) for (var k in opts) f[k] = opts[k];
+    fx.push(f); return f;
+  }
+  function spawnHeart() {
+    for (var i = 0; i < 2; i++) spawnFx('heart', {
+      x: fish.x + (i ? 7 : -4), y: fish.y - 4, vx: (Math.random() - 0.5) * 0.25, vy: -(0.5 + Math.random() * 0.3),
+      life: 90 + Math.random() * 40, color: i ? '#ff8ab0' : '#ff5c8a', s: 1 + Math.random()
+    });
+  }
+  function spawnBubRain() {
+    for (var i = 0; i < 14; i++) bubbles.push({
+      x: 4 + Math.random() * (AQ_W - 8), y: AQ_H - 3, r: 1 + Math.random() * 2.5,
+      vy: -(0.5 + Math.random() * 0.6), wobble: Math.random() * 6, alpha: 0.7
+    });
+  }
+  function spawnJelly() { var l = Math.random() < 0.5; spawnFx('jelly', { x: l ? -10 : AQ_W + 10, y: 28 + Math.random() * 30, vx: l ? 0.4 : -0.4, dir: l ? 1 : -1, life: 900 }); }
+  function spawnCrab() { var l = Math.random() < 0.5; spawnFx('crab', { x: l ? -8 : AQ_W + 8, y: AQ_H - 6, vx: l ? 0.35 : -0.35, dir: l ? 1 : -1, life: 900 }); }
+  function spawnStarfish() { spawnFx('star', { x: 12 + Math.random() * (AQ_W - 24), y: AQ_H - 5, life: 500 }); }
+  function spawnTurtle() { var l = Math.random() < 0.5; spawnFx('turtle', { x: l ? -14 : AQ_W + 14, y: 36 + Math.random() * 22, vx: l ? 0.32 : -0.32, dir: l ? 1 : -1, life: 1000 }); }
+  function spawnShadow() { var l = Math.random() < 0.5; spawnFx('shadow', { x: l ? -36 : AQ_W + 36, y: 18 + Math.random() * 40, vx: l ? 0.8 : -0.8, dir: l ? 1 : -1, life: 700 }); }
+  function spawnSquid() { var l = Math.random() < 0.5; spawnFx('squid', { x: l ? -12 : AQ_W + 12, y: 24 + Math.random() * 30, vx: l ? 0.5 : -0.5, dir: l ? 1 : -1, life: 800 }); }
+  function spawnRainbow() {
+    var cols = ['#ff5f57', '#ffbd2e', '#28c840', '#45a1ff', '#b45cff', '#ff7ad1'];
+    for (var i = 0; i < 6; i++) bubbles.push({
+      x: fish.x + fish.dir * 8, y: fish.y - 2, r: 1.5 + Math.random(), vy: -(0.5 + Math.random() * 0.2),
+      wobble: i * 1.1, alpha: 0.9, color: cols[i]
+    });
+  }
+
+  function drawHeart(ctx, f) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+    ctx.globalAlpha = Math.min(1, f.age / 12); ctx.fillStyle = f.color;
+    ctx.fillRect(-2, -1, 4, 2); ctx.fillRect(-1, -3, 2, 2);
+    ctx.fillRect(-3, 0, 6, 2); ctx.fillRect(-1, 2, 2, 1);
+    ctx.restore();
+  }
+  function drawJelly(ctx, f, t) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.globalAlpha = 0.65;
+    ctx.fillStyle = 'rgba(200,225,255,0.6)'; ctx.fillRect(-5, -5, 10, 4); ctx.fillRect(-7, -3, 14, 3);
+    ctx.fillStyle = 'rgba(200,225,255,0.35)';
+    for (var i = 0; i < 3; i++) ctx.fillRect(-3 + i * 3, 2 + Math.sin(t * 2 + i) * 1.5, 2, 6);
+    ctx.restore();
+  }
+  function drawCrab(ctx, f, t) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+    ctx.fillStyle = '#d8642a'; ctx.fillRect(-4, -2, 8, 4);
+    ctx.fillRect(-5, -4, 2, 3); ctx.fillRect(3, -4, 2, 3);
+    ctx.fillStyle = '#000'; ctx.fillRect(-3, -2, 2, 2); ctx.fillRect(1, -2, 2, 2);
+    ctx.restore();
+  }
+  function drawStarfish(ctx, f) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
+    ctx.fillStyle = '#e89b6a';
+    ctx.fillRect(-1, -3, 2, 2); ctx.fillRect(-3, -1, 2, 2); ctx.fillRect(1, -1, 2, 2);
+    ctx.fillRect(-1, 1, 2, 2); ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
+  function drawTurtle(ctx, f, t) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+    ctx.fillStyle = '#4f8f3a'; ctx.fillRect(-4, -4, 8, 6);
+    ctx.fillStyle = '#6fae57'; ctx.fillRect(-2, -3, 4, 4);
+    ctx.fillStyle = '#3a6f2c'; ctx.fillRect(-5, 2, 3, 2); ctx.fillRect(2, 2, 3, 2);
+    ctx.fillStyle = '#b0d888'; ctx.fillRect(4, -3, 3, 4);
+    ctx.fillStyle = '#000'; ctx.fillRect(5, -3, 2, 2);
+    ctx.restore();
+  }
+  function drawShadow(ctx, f) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1); ctx.scale(3, 3);
+    ctx.globalAlpha = 0.35; ctx.fillStyle = '#0a0f14';
+    ctx.fillRect(-8, -2, 14, 4); ctx.fillRect(-6, -3, 9, 6);
+    ctx.fillRect(-12, -3, 4, 3); ctx.fillRect(-12, 1, 4, 3);
+    ctx.fillRect(6, -2, 3, 2);
+    ctx.restore();
+  }
+  function drawSquid(ctx, f, t) {
+    ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
+    ctx.fillStyle = '#b46ad8'; ctx.fillRect(-4, -4, 8, 6); ctx.fillRect(4, -3, 3, 4);
+    ctx.fillStyle = 'rgba(180,106,216,0.5)';
+    for (var i = 0; i < 4; i++) ctx.fillRect(-3 + i * 2, 2 + Math.sin(t * 2 + i) * 1.5, 2, 6);
+    ctx.restore();
+  }
+  function drawBubFx(ctx, f) { drawBubble(ctx, f.x, f.y, f.r, f.alpha); }
+
+  function updateFx(t, waterTop) {
+    for (var i = fx.length - 1; i >= 0; i--) {
+      var f = fx[i]; f.age++;
+      f.x += f.vx; f.y += f.vy;
+      if (f.type === 'heart') { f.x += Math.sin(t + f.age * 0.1) * 0.2; }
+      if (f.age > f.life || f.x < -40 || f.x > AQ_W + 40) fx.splice(i, 1);
+    }
+    if (fishFx.golden > 0) fishFx.golden--;
+    if (fishFx.spin > 0) fishFx.spin--;
+    if (scene.light > 0) scene.light--;
+    if (scene.current > 0) scene.current--;
+    if (scene.drip > 0) scene.drip--;
+    if (scene.dust > 0) scene.dust--;
+  }
+
+  function updateEggs(t, waterTop) {
+    // 触发：约50s后活跃，开越久频率越高
+    eggFrame++;
+    if (eggCooldown > 0) eggCooldown--;
+    if (eggFrame > 3000 && eggCooldown <= 0 && !predator) {
+      var p = 0.0008 + Math.min(0.005, (eggFrame - 3000) / 90000);
+      if (Math.random() < p) {
+        eggCooldown = 1300 + Math.floor(Math.random() * 2400); // ~22~62s 冷却
+        var r = Math.random();
+        // --- 20+ 彩蛋随机库 ---
+        if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
+        else if (r < 0.14 && !fish.dead && extraFish.length === 0) spawnCompanions(); // 2 同伴鱼
+        else if (r < 0.20 && !fish.dead && !jumping) startJump();    // 3 跳跃
+        else if (r < 0.26 && !fish.dead) spawnHeart();               // 4 冒爱心
+        else if (r < 0.32 && !fish.dead) spawnRainbow();             // 5 彩虹泡泡
+        else if (r < 0.38) spawnJelly();                             // 6 水母
+        else if (r < 0.44) spawnCrab();                              // 7 螃蟹
+        else if (r < 0.50) spawnStarfish();                          // 8 海星
+        else if (r < 0.56) spawnTurtle();                            // 9 海龟
+        else if (r < 0.62) spawnShadow();                            // 10 鲨鱼剪影
+        else if (r < 0.68) spawnSquid();                             // 11 乌贼
+        else if (r < 0.74) spawnBubRain();                           // 12 泡泡雨
+        else if (r < 0.78 && !fish.dead) fishFx.golden = 150;        // 13 变金闪光
+        else if (r < 0.82 && !fish.dead) { fishFx.spin = 60; addRipple(fish.x, fish.y); } // 14 转圈
+        else if (r < 0.86) scene.light = 220;                        // 15 光线增强
+        else if (r < 0.90) scene.current = 220;                      // 16 洋流水草加速
+        else if (r < 0.94) scene.drip = 240;                         // 17 玻璃水珠滑落
+        else if (r < 0.98) scene.dust = 200;                         // 18 尘埃风暴
+        else if (!fish.dead) spawnHeart();                           // 兜底
+      }
+    }
+    // 捕食者
+    if (predator) {
+      var pdx = predator.tx - predator.x, pdy = predator.ty - predator.y;
+      var pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+      if (pdist > 1) { predator.x += pdx / pdist * predator.speed; predator.y += pdy / pdist * predator.speed; }
+      predator.dir = pdx > 0 ? 1 : -1;
+      // 近身 → 吞掉主角
+      if (!fish.dead && !fish.eaten && pdist < 11) {
+        fish.eaten = true; fish.x = -30; fish.y = -30;
+        burstBubbles(); addRipple(predator.x, predator.y);
+        predator.victim = true;
+        predator.tx = Math.random() < 0.5 ? -32 : AQ_W + 32;
+        predator.ty = 20 + Math.random() * 60;
+      }
+      // 捕食者离场 → 主角重生
+      if (predator.victim && (predator.x < -28 || predator.x > AQ_W + 28)) {
+        fish.eaten = false;
+        fish.x = AQ_W / 2; fish.y = Math.max(waterTop + 8, AQ_H / 2);
+        fish.tx = fish.x; fish.ty = fish.y; fish.state = 'swim'; fish.stateTimer = 0;
+        fish.celebrate = 30; fish.dartCd = 90;
+        burstBubbles(); addRipple(fish.x, fish.y);
+        predator = null;
+      } else if (predator.x < -32 || predator.x > AQ_W + 32) {
+        predator = null;
+      }
+    }
+    // 同伴鱼
+    for (var ei = extraFish.length - 1; ei >= 0; ei--) {
+      var ef = extraFish[ei];
+      ef.age++;
+      var edx = ef.tx - ef.x, edy = ef.ty - ef.y;
+      var edist = Math.sqrt(edx * edx + edy * edy);
+      if (edist > 2) { ef.x += edx / edist * ef.speed; ef.y += edy / edist * ef.speed; ef.dir = edx > 0 ? 1 : -1; }
+      else { ef.tx = 14 + Math.random() * (AQ_W - 28); ef.ty = 24 + Math.random() * 50; }
+      if (ef.y < waterTop + 4) ef.y = waterTop + 4;
+      ef.x = Math.max(6, Math.min(AQ_W - 6, ef.x));
+      if (ef.age > ef.life) { ef.tx = ef.x < AQ_W / 2 ? -30 : AQ_W + 30; if (ef.x < -20 || ef.x > AQ_W + 20) extraFish.splice(ei, 1); }
+    }
+    // 跳跃
+    if (jumping) {
+      jumpPhase++;
+      if (jumpPhase < 60) {
+        var k = jumpPhase / 60;
+        fish.y = jumpBaseY - Math.sin(k * Math.PI) * 22;
+        if (jumpPhase % 12 === 0) addRipple(fish.x, waterTop + 4);
+      } else { jumping = false; fish.y = jumpBaseY; }
+    }
+    // 特效实体
+    updateFx(t, waterTop);
+  }
 
   // 鼠标悬停追踪
   var cursorX = -1, cursorY = -1, cursorInTank = false;
@@ -389,9 +628,20 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     { ph: 2.5, amp: 1.2, freq: 0.20, spd: 15, dy: 2 }
   ];
   var caustics = [{ x: 30, ph: 0, spd: 0.3 }, { x: 80, ph: 2, spd: 0.4 }, { x: 120, ph: 4, spd: 0.25 }];
-  var ripples = [], gravel = [], plants = [
-    { x: 12, seg: 5, ph: 0 }, { x: 138, seg: 4, ph: 1.5 }, { x: 130, seg: 3, ph: 3 }
-  ];
+  var ripples = [], gravel = [], plants = [];
+  var PLANT_COL = ['#1f5c3a', '#2a6e46', '#1b4d31', '#2f7f52', '#174234'];
+  (function () {
+    var spots = [10, 26, 44, 62, 84, 104, 122, 140];
+    for (var i = 0; i < spots.length; i++) {
+      plants.push({
+        x: spots[i] + (Math.random() * 4 - 2),
+        stems: 1 + (i % 2),                       // 1~2 茎，克制不抢戏
+        h: 12 + Math.floor(Math.random() * 12),   // 12~24 矮，背景化
+        ph: Math.random() * 6.28,
+        col: PLANT_COL[Math.floor(Math.random() * PLANT_COL.length)]
+      });
+    }
+  })();
   var glassDrops = [{ x: 8, y: 15 }, { x: 142, y: 25 }, { x: 5, y: 60 }, { x: 135, y: 70 }, { x: 145, y: 10 }];
   (function () {
     for (var i = 0; i < 22; i++) gravel.push({
@@ -450,43 +700,42 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     });
   }
 
-  // ---- 绘制函数 ----
-  function drawPixelFish(ctx, x, y, dir, color, belly, fin, stripe, eyeColor, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
+  // ---- 绘制函数 ----（主角鱼：明确鱼形+丑萌——流线身体+分叉尾鳍+背鳍+尖头，大眼+腮红）
+  function drawPixelFish(ctx, x, y, dir, color, eyeColor, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
     ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
-    // 尾（鳍色，随摆动）
-    ctx.fillStyle = fin;
-    ctx.fillRect(-12, -1 + Math.round(tailSwing * 1.8), 3, 3);
-    ctx.fillRect(-10, 0 + Math.round(tailSwing * 2.2), 2, 2);
-    ctx.fillRect(-11, -2 + Math.round(tailSwing * 1.4), 2, 2);
-    // 身体上层（主色）
     ctx.fillStyle = color;
-    ctx.fillRect(-8, -3, 13, 4); ctx.fillRect(-6, -4, 10, 2); ctx.fillRect(-4, -5, 7, 2);
-    // 身体中层过渡
-    ctx.fillStyle = color;
-    ctx.fillRect(-8, 0, 13, 1);
-    // 腹部（belly 色）
-    ctx.fillStyle = belly;
-    ctx.fillRect(-7, 1, 12, 3); ctx.fillRect(-4, -1, 9, 2);
-    // 纹路（如有）
-    if (stripe) {
-      ctx.fillStyle = stripe;
-      ctx.fillRect(-4, -3, 1, 5); ctx.fillRect(0, -3, 1, 5); ctx.fillRect(2, -3, 1, 3);
-      ctx.fillRect(-6, -2, 1, 4);
-    }
-    // 背鳍（鳍色）
-    ctx.fillStyle = fin;
-    ctx.fillRect(-1, -7, 4, 2); ctx.fillRect(0, -6, 3, 1);
-    // 胸鳍/腹鳍（鳍色，随摆动）
-    ctx.fillRect(2, 3 + Math.round(pecSwing * 1.5), 2, 2);
-    ctx.fillRect(1, 4 + Math.round(pecSwing * 1.5), 1, 2);
-    ctx.fillRect(-3, 4, 2, 1);
-    // 嘴
-    if (mouthOpen) { ctx.fillStyle = '#000'; ctx.fillRect(6, -1, 2, 2); }
-    else { ctx.fillStyle = color; ctx.fillRect(6, 0, 2, 1); }
-    // 眼睛（瞳孔随 eyeOx/eyeOy 追踪光标）
-    var ex = 4 + Math.round(eyeOx), ey = -4 + Math.round(eyeOy);
-    ctx.fillStyle = eyeColor; ctx.fillRect(ex, ey, 2, 2);
-    ctx.fillStyle = '#fff'; ctx.fillRect(ex, ey, 1, 1);
+    // 尾柄（细，连接身体）
+    ctx.fillRect(-12, -2, 3, 4);
+    // 流线身体（中部宽高，往尾收窄，往头变尖）
+    ctx.fillRect(-10, -3, 5, 6);
+    ctx.fillRect(-6, -5, 9, 10);
+    ctx.fillRect(-4, -6, 8, 3);   // 背部隆起
+    ctx.fillRect(3, -4, 4, 8);    // 头
+    ctx.fillRect(7, -3, 3, 6);    // 头尖
+    ctx.fillRect(9, -2, 2, 4);    // 最前端（嘴）
+    // 背鳍（顶部小三角）
+    ctx.fillRect(-3, -9, 5, 2); ctx.fillRect(-5, -8, 3, 1);
+    // 尾鳍（分叉扇形，随尾摆）
+    ctx.fillRect(-15, -5, 4, 3);
+    ctx.fillRect(-15, 2, 4, 3);
+    ctx.fillRect(-13, -2 + Math.round(tailSwing), 3, 4);
+    // 胸鳍/腹鳍
+    ctx.fillRect(2, 4 + Math.round(pecSwing * 1.2), 3, 2);
+    ctx.fillRect(-2, 5, 3, 1);
+    // 高光鳞片（淡银点缀）
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(-3, -3, 2, 2); ctx.fillRect(1, -2, 2, 2);
+    // 腮红（萌）
+    ctx.fillStyle = 'rgba(255,150,160,0.5)';
+    ctx.fillRect(1, -1, 3, 2);
+    // 眼睛（大眼白+黑瞳+高光，头部近嘴，呆萌追踪光标）
+    var ex = 6 + Math.round(eyeOx), ey = -4 + Math.round(eyeOy);
+    ctx.fillStyle = '#fff'; ctx.fillRect(ex, ey, 3, 3);
+    ctx.fillStyle = eyeColor; ctx.fillRect(ex + 1, ey + 1, 2, 2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(ex + 1, ey, 1, 1);
+    // 嘟嘴（头部最前端）
+    ctx.fillStyle = '#222';
+    if (mouthOpen) ctx.fillRect(11, -2, 2, 2); else ctx.fillRect(11, -1, 2, 1);
     ctx.restore();
   }
   function drawDeadFish(ctx, x, y, color, flip) {
@@ -499,23 +748,38 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.fillStyle = '#000'; ctx.fillRect(3, -2, 2, 2); ctx.fillRect(5, 0, 2, 2);
     ctx.globalAlpha = 1; ctx.restore();
   }
-  function drawBubble(ctx, x, y, r, alpha) {
+  function drawBubble(ctx, x, y, r, alpha, color) {
     var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.15) + ')');
-    grad.addColorStop(0.7, 'rgba(200,230,255,' + (alpha * 0.4) + ')');
-    grad.addColorStop(1, 'rgba(180,220,255,' + (alpha * 0.1) + ')');
+    if (color) {
+      grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.25) + ')');
+      grad.addColorStop(0.7, color);
+      grad.addColorStop(1, 'rgba(255,255,255,0.1)');
+    } else {
+      grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.15) + ')');
+      grad.addColorStop(0.7, 'rgba(200,230,255,' + (alpha * 0.4) + ')');
+      grad.addColorStop(1, 'rgba(180,220,255,' + (alpha * 0.1) + ')');
+    }
     ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
-  function drawSeaweed(ctx, plant, waterTop, t) {
-    var px = plant.x, py = AQ_H - 2, segH = 6;
-    ctx.fillStyle = 'rgba(' + waterRGB + ',0.55)';
-    for (var s = 0; s < plant.seg; s++) {
-      var sway = Math.sin(t * 0.8 + plant.ph + s * 0.6) * 2.5;
-      ctx.fillRect(Math.round(px + sway), py - segH, 3, segH);
-      py -= segH - 1; if (py < waterTop + 4) break;
+  function drawSeaweed(ctx, plant, waterTop, t, surge) {
+    // 背景化：暗绿 + 低透明度 + 微摆 + 矮，不抢主角鱼视线
+    if (!surge) surge = 1;
+    ctx.globalAlpha = 0.5;
+    for (var s = 0; s < plant.stems; s++) {
+      var bx = plant.x + s * 3 - 1, py = AQ_H - 1;
+      var len = plant.h * (1 - s * 0.2);
+      if (len < 7) len = 7;
+      for (var seg = 0; seg < len; seg += 3) {
+        if (py - 3 < waterTop + 3) break;   // 只在水下生长
+        var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * surge; // 微摆，scene.current 时加速
+        ctx.fillStyle = (seg % 4 < 2) ? plant.col : '#143629';
+        ctx.fillRect(Math.round(bx + sway), py, 3, 3);
+        py -= 2;
+      }
+      ctx.fillStyle = plant.col;
+      ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * surge) - 1, py, 4, 2); // 顶叶
     }
-    ctx.fillStyle = 'rgba(' + waterRGB + ',0.4)';
-    ctx.fillRect(Math.round(px + sway - 1), py, 5, 2);
+    ctx.globalAlpha = 1;
   }
 
   // 装饰粒子绘制器
@@ -547,7 +811,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     fish.dartCd = Math.max(0, fish.dartCd - 1);
     if (fish.celebrate > 0) fish.celebrate--;
 
-    if (!fish.dead && fish.state !== 'reviving') {
+    if (!fish.dead && fish.state !== 'reviving' && !fish.eaten) {
       // 鱼眼追踪光标（瞳孔偏向光标方向）
       if (cursorInTank) {
         fish.eyeOx = Math.max(-1, Math.min(1, (cursorX - fish.x) / 30));
@@ -580,7 +844,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         if (foodTarget) {
           var fdx = foodTarget.x - fish.x, fdy = foodTarget.y - fish.y;
           var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
-          if (fdist > 3) {
+          if (fdist > 7) {
             fish.x += fdx / fdist * fish.speed * 1.4;
             fish.y += fdy / fdist * fish.speed * 1.4;
             fish.dir = fdx > 0 ? 1 : -1;
@@ -676,6 +940,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       fish.speed = 0.35 + waterNow * 0.7;
     }
 
+    // === 1.5 彩蛋 ===
+    updateEggs(t, waterTop);
+
     // === 2. 气泡 ===
     if (!fish.dead && Math.random() < 0.025) {
       var br = 1 + Math.random() * 3;
@@ -694,12 +961,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
 
     // === 2b. 鱼食（下沉 + 消融） ===
-    var foodFloor = AQ_H - 4;
+    var foodFloor = AQ_H - 10; // 停在鱼能游到的位置（鱼 clamp 到 AQ_H-8，留 2px 余量够到）
     for (var fi = food.length - 1; fi >= 0; fi--) {
       var fd = food[fi];
       fd.age++; fd.y += fd.vy; fd.x += Math.sin(t * 2 + fd.wobble) * 0.15;
       if (fd.y > foodFloor) { fd.y = foodFloor; fd.vy = 0; }
-      if (fd.age > 900) food.splice(fi, 1); // ~15秒未吃消融
+      if (fd.age > 450) food.splice(fi, 1); // ~7.5秒未吃自动消融，避免残留
     }
 
     // === 3. 涟漪 ===
@@ -756,7 +1023,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (wh > 1) {
       // 光束（对角，非常淡）
       var beamX = 20 + Math.sin(t * 0.15) * 10;
-      var beamAlpha = 0.025 + Math.sin(t * 0.4) * 0.008;
+      var beamAlpha = 0.025 + Math.sin(t * 0.4) * 0.008 + (scene.light > 0 ? 0.055 : 0);
       aqCtx.fillStyle = 'rgba(255,255,255,' + beamAlpha + ')';
       aqCtx.beginPath();
       aqCtx.moveTo(beamX, AQ_H - wh); aqCtx.lineTo(beamX + 8, AQ_H - wh);
@@ -824,14 +1091,18 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       }
 
       // 水草
-      for (var pi = 0; pi < plants.length; pi++) drawSeaweed(aqCtx, plants[pi], waterTop, t);
+      for (var pi = 0; pi < plants.length; pi++) drawSeaweed(aqCtx, plants[pi], waterTop, t, (scene.current > 0 ? 2.2 : 1));
     }
 
-    // 尘埃粒子（有水时）
+    // 尘埃粒子（有水时；scene.dust>0 用加速版，模拟被扰动）
     if (waterNow > 0.1) {
       for (var dd = 0; dd < dust.length; dd++) {
         var dp2 = dust[dd];
-        aqCtx.fillStyle = 'rgba(255,255,255,' + dp2.alpha + ')';
+        if (scene.dust > 0) {
+          dp2.x += dp2.vx * 2 + Math.sin(t * 0.8 + dd) * 0.25;
+          dp2.y += dp2.vy * 2 + Math.cos(t * 0.6 + dd * 1.3) * 0.2;
+        }
+        aqCtx.fillStyle = 'rgba(255,255,255,' + Math.min(0.7, dp2.alpha + (scene.dust > 0 ? 0.25 : 0)) + ')';
         aqCtx.fillRect(Math.round(dp2.x), Math.round(dp2.y), dp2.sz, dp2.sz > 1 ? 1 : dp2.sz);
       }
     }
@@ -845,7 +1116,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
 
     // 气泡
-    for (var bk = 0; bk < bubbles.length; bk++) drawBubble(aqCtx, bubbles[bk].x, bubbles[bk].y, bubbles[bk].r, Math.max(0, bubbles[bk].alpha));
+    for (var bk = 0; bk < bubbles.length; bk++) drawBubble(aqCtx, bubbles[bk].x, bubbles[bk].y, bubbles[bk].r, Math.max(0, bubbles[bk].alpha), bubbles[bk].color);
     for (var bl = 0; bl < burst.length; bl++) drawBubble(aqCtx, burst[bl].x, burst[bl].y, burst[bl].r, Math.max(0, burst[bl].alpha));
 
     // 鱼食
@@ -855,14 +1126,32 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       aqCtx.fillRect(Math.round(fdp.x), Math.round(fdp.y), 2, 2);
     }
 
-    // 鱼
+    // 背景生物 fx（画在主角前，作为背景层）
+    for (var fxi = 0; fxi < fx.length; fxi++) {
+      var fxe = fx[fxi];
+      if (fxe.type === 'jelly') drawJelly(aqCtx, fxe, t);
+      else if (fxe.type === 'crab') drawCrab(aqCtx, fxe, t);
+      else if (fxe.type === 'star') drawStarfish(aqCtx, fxe);
+      else if (fxe.type === 'turtle') drawTurtle(aqCtx, fxe, t);
+      else if (fxe.type === 'shadow') drawShadow(aqCtx, fxe);
+      else if (fxe.type === 'squid') drawSquid(aqCtx, fxe, t);
+    }
+    // 鱼（应用彩蛋 flags：金色 / 转圈）
+    var drawColor = fish.color, drawDir = fish.dir;
+    if (fishFx.golden > 0) drawColor = '#f6c945';
+    if (fishFx.spin > 0) drawDir = (Math.floor(t * 6) % 2 === 0) ? fish.dir : -fish.dir;
     if (fish.dead || fish.state === 'dying') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress);
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
-    } else {
-      drawPixelFish(aqCtx, fish.x, fish.y, fish.dir, fish.color, fish.belly, fish.fin, fish.stripe, fish.eyeColor,
+    } else if (!fish.eaten) {
+      drawPixelFish(aqCtx, fish.x, fish.y, drawDir, drawColor, fish.eyeColor,
         Math.sin(fish.tail) * 1.5, Math.sin(fish.pecPhase) * 1.5, Math.sin(fish.mouthPhase) > 0.7, fish.eyeOx, fish.eyeOy);
+    }
+    // 前景 fx（爱心等，画在主角之上）
+    for (var fxi2 = 0; fxi2 < fx.length; fxi2++) {
+      var fxe2 = fx[fxi2];
+      if (fxe2.type === 'heart') drawHeart(aqCtx, fxe2);
     }
 
     // 玻璃效果
@@ -871,6 +1160,14 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     aqCtx.fillRect(AQ_W - 10, AQ_H - 3, 8, 1); aqCtx.fillRect(AQ_W - 3, AQ_H - 9, 1, 7);
     aqCtx.fillStyle = 'rgba(255,255,255,0.07)';
     for (var dgi = 0; dgi < glassDrops.length; dgi++) aqCtx.fillRect(glassDrops[dgi].x, glassDrops[dgi].y, 2, 2);
+    if (scene.drip > 0) {
+      aqCtx.fillStyle = 'rgba(255,255,255,0.18)';
+      for (var dri = 0; dri < 4; dri++) {
+        var dxp = 12 + dri * 34;
+        var dyp = (t * 1.2 + dri * 11) % AQ_H;
+        aqCtx.fillRect(Math.round(dxp), Math.round(dyp), 2, 3);
+      }
+    }
     var vg1 = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
     vg1.addColorStop(0, 'rgba(0,0,0,0.06)'); vg1.addColorStop(0.08, 'rgba(0,0,0,0)');
     vg1.addColorStop(0.92, 'rgba(0,0,0,0)'); vg1.addColorStop(1, 'rgba(0,0,0,0.06)');
