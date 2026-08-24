@@ -186,6 +186,7 @@ font-size:9px;z-index:4;font-variant-numeric:tabular-nums;cursor:pointer;transit
 .aq-bar .caret{font-size:9px;color:var(--text-tertiary,#6e7681);margin-left:5px;display:inline-block;transition:transform .2s}\
 .aqua.open .aq-bar .caret{transform:rotate(180deg)}\
 .aq-bar .nm{font-weight:700;font-size:9px;white-space:nowrap;flex-shrink:0}\
+.aq-bar .nm .hl{font-weight:900;font-size:12px;margin:0 1px;line-height:1}\
 .aq-bar .nm.peak{color:var(--warn,#f0883e)}\
 .aq-bar .nm.off{color:var(--accent,#58a6ff)}\
 .aq-bar .pr{color:var(--text2,#8b949e);white-space:nowrap;flex-shrink:0;overflow:hidden;text-overflow:ellipsis}\
@@ -221,6 +222,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 .panel::-webkit-scrollbar-thumb{background:var(--border,#30363d);border-radius:3px}\
 .phead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;border-bottom:1px solid var(--border2,#21262d)}\
 .phead .t{font-weight:700;font-size:13px}\
+.phead .t .hl,.tl-legend .hl{font-weight:900;font-size:14px}\
 .phead .t small{color:var(--text-tertiary,#8b949e);font-weight:400;margin-left:6px}\
 .status{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600}\
 .status.peak{background:rgba(240,136,62,.14);color:var(--warn,#f0883e)}\
@@ -281,7 +283,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 </div>\
 <div class="panel" id="panel">\
   <div class="phead">\
-    <div class="t">峰哥 &amp; 谷哥 值班表<small id="ver"></small></div>\
+    <div class="t">梁文<span class="hl">峰</span> &amp; 梁文<span class="hl">谷</span> 值班表<small id="ver"></small></div>\
     <span class="status" id="status">—</span>\
   </div>\
   <div class="motto" id="motto"></div>\
@@ -297,7 +299,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   <div class="timeline">\
     <div class="tl-title">时段 (北京时间)</div>\
     <div class="tl" id="tl"></div>\
-    <div class="tl-legend"><span><i style="background:var(--warn,#f0883e)"></i>峰哥 9-12/14-18</span><span><i style="background:#238636"></i>谷哥 半价</span></div>\
+    <div class="tl-legend"><span><i style="background:var(--warn,#f0883e)"></i>梁文<span class="hl">峰</span> 9-12/14-18</span><span><i style="background:#238636"></i>梁文<span class="hl">谷</span> 半价</span></div>\
   </div>\
   <div class="foot">\
     <span class="remind"><span class="switch" id="remindSw"></span>切换变色提醒</span>\
@@ -320,8 +322,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   try { remindOn = localStorage.getItem('__ds_remind__') !== '0'; } catch (e) {}
 
   // ---- 调侃文案 ----
-  var PEAK_MOTTOS = ['峰哥上班，钱包打烊', '人挤人，峰哥笑纳', '现在调用，都是峰哥价', '错峰一时爽，一直错峰一直爽', '高峰路上，峰哥收过路费'];
-  var OFF_MOTTOS = ['谷哥营业，半价捡漏', '谷底风景好，谷哥请客', '趁谷哥在，多囤点 token', '夜猫子福利，谷哥买单', '低谷抄底，谷哥陪你'];
+  var PEAK_MOTTOS = ['梁文峰上班，钱包打烊', '人挤人，梁文峰笑纳', '现在调用，都是梁文峰价', '错峰一时爽，一直错峰一直爽', '高峰路上，梁文峰收过路费'];
+  var OFF_MOTTOS = ['梁文谷营业，半价捡漏', '谷底风景好，梁文谷请客', '趁梁文谷在，多囤点 token', '夜猫子福利，梁文谷买单', '低谷抄底，梁文谷陪你'];
   var ICON_PEAK = '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M2 20 L8 8 L12 14 L16 5 L22 20 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
   var ICON_OFF = '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M2 6 L8 18 L12 11 L16 17 L22 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
   var lastMottoIdx = -1, lastMottoPeak = null, toastTimer = null;
@@ -367,13 +369,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
     dead: false, color: '#e6edf3', belly: null, fin: null, tail: null, stripe: null, highlight: null, eyeColor: '#000', deadColor: '#6e7681',
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
-    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false, flopT: 0, flopDir: 1
+    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false, flopT: 0, flopDir: 1, flopGap: 120
   };
   var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255', aridF = 0;
   var lastFishPeak = null, aqRaf = null;
 
   // ---- 彩蛋系统 ----（开久了偶尔触发：捕食者吃鱼 / 多条同伴鱼 / 鱼跃出水）
-  var eggFrame = 0, eggCooldown = 300;
+  var eggFrame = 0, eggCooldown = 300, windWeedCd = 400;
   var predator = null, extraFish = [], jumping = false, jumpPhase = 0, jumpBaseY = 0;
   var EGG_COLORS = ['#f0b429', '#5aa9e6', '#f2a6c2', '#9be564', '#c89bf0'];
 
@@ -916,12 +918,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.save(); ctx.translate(Math.round(x), Math.round(y + (flopY || 0)));
     ctx.scale(1, 1 - flip * 2);
     ctx.globalAlpha = flip < 0.5 ? 0.6 + flip * 0.8 : 1;
-    ctx.fillStyle = color;
+    var c = flopY ? '#ffffff' : color;   // 扑腾时闪白，平时灰
+    ctx.fillStyle = c;
     ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 10, 7);
     ctx.fillRect(-4, -4, 7, 8); ctx.fillRect(-10, -1, 3, 3);
     ctx.fillStyle = '#000'; ctx.fillRect(3, -2, 2, 2); ctx.fillRect(5, 0, 2, 2);
     // 蹦跶时尾巴抽动一下
-    if (flopY) { ctx.fillStyle = color; ctx.fillRect(-11, -1 + (flopY > 1 ? 1 : -1), 2, 2); }
+    if (flopY) { ctx.fillStyle = c; ctx.fillRect(-11, -1 + (flopY > 1 ? 1 : -1), 2, 2); }
     ctx.globalAlpha = 1; ctx.restore();
   }
   function drawBubble(ctx, x, y, r, alpha, color) {
@@ -1129,7 +1132,27 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // === 1.5 死鱼偶尔蹦跶（回光返照，高峰没水时更生动）===
     if (fish.dead && fish.state === 'dead') {
       if (fish.flopT > 0) fish.flopT--;
-      else if (Math.random() < 0.006) { fish.flopT = 22; fish.flopDir = Math.random() < 0.5 ? 1 : -1; }
+      else {
+        if (fish.flopGap > 0) fish.flopGap--;
+        if (fish.flopGap <= 0) {   // 3~10s 随机扑腾一次
+          fish.flopT = 22; fish.flopDir = Math.random() < 0.5 ? 1 : -1;
+          fish.flopGap = 180 + Math.floor(Math.random() * 421);  // 180~600帧 = 3~10s
+        }
+      }
+    }
+
+    // === 1.5 风滚草常态（干旱时经常滚过，同屏最多3个，每次1-3随机）===
+    if (aridF > 0.5) {
+      if (windWeedCd > 0) windWeedCd--;
+      else {
+        var wCount = 0;
+        for (var wc = 0; wc < fx.length; wc++) if (fx[wc].type === 'weed') wCount++;
+        if (wCount < 3) {
+          var wn = 1 + Math.floor(Math.random() * 3);
+          for (var wj = 0; wj < wn && wCount < 3; wj++) { spawnTumbleweed(); wCount++; }
+          windWeedCd = 300 + Math.floor(Math.random() * 300); // 5~10s 再来一批
+        } else windWeedCd = 90;
+      }
     }
 
     // === 1.5 彩蛋 ===
@@ -1214,23 +1237,48 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     aqCtx.globalAlpha = 1;
 
-    // === 干旱背景（水位低时随 aridF 平滑浮现，切换不生硬）===
+    // === 干旱背景：沙漠风景（水位低时随 aridF 平滑浮现）===
     if (aridF > 0.05) {
       var ar = aridF;
-      var aGrad = aqCtx.createLinearGradient(0, AQ_H - 14, 0, AQ_H);
-      aGrad.addColorStop(0, 'rgba(158,116,62,' + (0.5 * ar) + ')');
-      aGrad.addColorStop(1, 'rgba(122,90,48,' + (0.62 * ar) + ')');
-      aqCtx.fillStyle = aGrad; aqCtx.fillRect(0, AQ_H - 12, AQ_W, 12);
-      aqCtx.fillStyle = 'rgba(120,88,46,' + (0.45 * ar) + ')';
-      aqCtx.fillRect(Math.round(30 + Math.sin(t * 0.3) * 5), AQ_H - 5, 22, 3);
-      aqCtx.fillRect(Math.round(96 + Math.cos(t * 0.35) * 6), AQ_H - 6, 26, 3);
+      // 天空（暖黄渐变）
+      var sky = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
+      sky.addColorStop(0, 'rgba(230,192,122,' + (0.32 * ar) + ')');
+      sky.addColorStop(0.62, 'rgba(214,160,92,' + (0.28 * ar) + ')');
+      sky.addColorStop(1, 'rgba(180,120,64,' + (0.4 * ar) + ')');
+      aqCtx.fillStyle = sky; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
+      // 烈日（右上一轮）
+      aqCtx.fillStyle = 'rgba(255,232,150,' + (0.55 * ar) + ')';
+      aqCtx.beginPath(); aqCtx.arc(AQ_W - 24, 15, 7, 0, Math.PI * 2); aqCtx.fill();
+      aqCtx.fillStyle = 'rgba(255,232,150,' + (0.22 * ar) + ')';
+      aqCtx.beginPath(); aqCtx.arc(AQ_W - 24, 15, 12, 0, Math.PI * 2); aqCtx.fill();
+      // 远沙丘（起伏轮廓，微动）
+      aqCtx.fillStyle = 'rgba(196,144,74,' + (0.4 * ar) + ')';
+      aqCtx.beginPath(); aqCtx.moveTo(0, AQ_H - 24);
+      for (var dq = 0; dq <= AQ_W; dq += 10) aqCtx.lineTo(dq, AQ_H - 24 - Math.sin(dq * 0.08 + t * 0.12) * 3);
+      aqCtx.lineTo(AQ_W, AQ_H); aqCtx.lineTo(0, AQ_H); aqCtx.closePath(); aqCtx.fill();
+      // 近处沙地
+      var sGrad = aqCtx.createLinearGradient(0, AQ_H - 14, 0, AQ_H);
+      sGrad.addColorStop(0, 'rgba(164,122,64,' + (0.5 * ar) + ')');
+      sGrad.addColorStop(1, 'rgba(132,94,48,' + (0.6 * ar) + ')');
+      aqCtx.fillStyle = sGrad; aqCtx.fillRect(0, AQ_H - 12, AQ_W, 12);
+      // 沙波纹
+      aqCtx.strokeStyle = 'rgba(150,108,58,' + (0.4 * ar) + ')'; aqCtx.lineWidth = 1;
+      for (var sm = 0; sm < 3; sm++) {
+        aqCtx.beginPath();
+        for (var sx2 = 0; sx2 <= AQ_W; sx2 += 6) { var sy2 = AQ_H - 4 + sm * 2 + Math.sin(sx2 * 0.16 + sm + t * 0.3) * 1.2; if (sx2 === 0) aqCtx.moveTo(sx2, sy2); else aqCtx.lineTo(sx2, sy2); }
+        aqCtx.stroke();
+      }
+      // 仙人掌剪影（左）
+      aqCtx.fillStyle = 'rgba(58,88,48,' + (0.5 * ar) + ')';
+      aqCtx.fillRect(16, AQ_H - 16, 3, 10); aqCtx.fillRect(10, AQ_H - 14, 3, 4); aqCtx.fillRect(21, AQ_H - 15, 3, 5);
+      // 枯树剪影（右）
+      aqCtx.fillStyle = 'rgba(92,66,40,' + (0.5 * ar) + ')';
+      aqCtx.fillRect(AQ_W - 30, AQ_H - 16, 2, 10); aqCtx.fillRect(AQ_W - 33, AQ_H - 17, 2, 2); aqCtx.fillRect(AQ_W - 27, AQ_H - 18, 2, 2); aqCtx.fillRect(AQ_W - 26, AQ_H - 8, 2, 3);
       // 龟裂
-      aqCtx.strokeStyle = 'rgba(76,52,26,' + (0.5 * ar) + ')';
-      aqCtx.lineWidth = 1; aqCtx.beginPath();
+      aqCtx.strokeStyle = 'rgba(76,52,26,' + (0.5 * ar) + ')'; aqCtx.lineWidth = 1; aqCtx.beginPath();
       for (var ck = 0; ck < 5; ck++) {
         var cx0 = 10 + ck * 28 + Math.sin(t * 0.3 + ck) * 3;
-        aqCtx.moveTo(cx0, AQ_H - 4); aqCtx.lineTo(cx0 + 5, AQ_H - 9);
-        aqCtx.lineTo(cx0 + 11, AQ_H - 3); aqCtx.lineTo(cx0 + 17, AQ_H - 10);
+        aqCtx.moveTo(cx0, AQ_H - 4); aqCtx.lineTo(cx0 + 5, AQ_H - 10); aqCtx.lineTo(cx0 + 11, AQ_H - 3); aqCtx.lineTo(cx0 + 17, AQ_H - 10);
       }
       aqCtx.stroke();
       // 热浪光斑
@@ -1372,7 +1420,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (fishFx.spin > 0) drawDir = (Math.floor(t * 6) % 2 === 0) ? fish.dir : -fish.dir;
     if (fish.dead || fish.state === 'dying') {
       var flopY = fish.flopT > 0 ? Math.round(fish.flopDir * Math.sin((22 - fish.flopT) * 1.3) * 3) : 0;
-      drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress, flopY);
+      drawDeadFish(aqCtx, fish.x, AQ_H - 8, aridF > 0.3 ? '#7d7d7d' : fish.deadColor, fish.flipProgress, flopY);   // 高峰死鱼灰色，扑腾时内部变白
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else if (!fish.eaten) {
@@ -1476,14 +1524,18 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     var priceOut = peak ? m.output.peak : m.output.off;
 
     // 桌面鱼缸状态
-    aqName.textContent = peak ? '峰哥' : '谷哥';
+    // 梁文 + 高亮的峰/谷字（内容均为硬编码常量，无用户输入，用 DOM 方式避免 innerHTML）
+    aqName.innerHTML = '';
+    aqName.appendChild(document.createTextNode('梁文'));
+    var aqHl = document.createElement('span'); aqHl.className = 'hl'; aqHl.textContent = peak ? '峰' : '谷';
+    aqName.appendChild(aqHl);
     aqName.className = 'nm ' + (peak ? 'peak' : 'off');
     aqua.className = 'aqua ' + (peak ? 'peak' : 'off');
     aqPrice.textContent = '输入 ¥' + fmt(price) + ' / 输出 ¥' + fmt(priceOut);
     // 鱼缸倒计时（简短）
     var ns = nextSwitchSec(p.d);
     var hh = Math.floor(ns / 3600), mm = Math.floor((ns % 3600) / 60), ss = ns % 60;
-    var toName = peak ? '谷哥' : '峰哥';
+    var toName = peak ? '梁文谷' : '梁文峰';
     aqNext.textContent = ns >= 3600
       ? hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转' + toName
       : pad2(mm) + ':' + pad2(ss) + ' 后转' + toName;
@@ -1554,9 +1606,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
     // 倒计时（面板）
     nextEl.textContent = ns < 60
-      ? (peak ? '谷哥 ' + ss + ' 秒后接棒，半价开抢！' : '峰哥 ' + ss + ' 秒后上班，钱包快跑！')
+      ? (peak ? '梁文谷 ' + ss + ' 秒后接棒，半价开抢！' : '梁文峰 ' + ss + ' 秒后上班，钱包快跑！')
       : ns < 3600
-        ? (peak ? '谷哥再陪 ' + pad2(mm) + ':' + pad2(ss) : '峰哥再榨 ' + pad2(mm) + ':' + pad2(ss))
+        ? (peak ? '梁文谷再陪 ' + pad2(mm) + ':' + pad2(ss) : '梁文峰再榨 ' + pad2(mm) + ':' + pad2(ss))
         : (peak ? hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转空闲' : hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转高峰');
 
     // 更新时间轴刻度线位置
@@ -1575,7 +1627,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (now - lastBlink < 4000) return;
     lastBlink = now;
     var c = peak ? '#f0883e' : '#3fb950';
-    showToast(peak ? '⛰ 峰哥上班了！' : '🌙 谷哥接棒，半价开抢！', c);
+    showToast(peak ? '⛰ 梁文峰上班了！' : '🌙 梁文谷接棒，半价开抢！', c);
     panel.style.transition = 'box-shadow .2s, border-color .2s';
     panel.style.borderColor = c;
     panel.style.boxShadow = '0 0 0 3px ' + c + '55, 0 12px 40px rgba(0,0,0,.5)';
