@@ -337,10 +337,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 3000);
   }
 
-  // ---- 像素鱼缸动画（桌面陪伴式 · 全面升级版） ----
+  // ---- 像素鱼缸动画（桌面陪伴式 · 主题系统 + 全效果） ----
   var AQ_W = 150, AQ_H = 92;
   var aqCtx = aqCanvas.getContext('2d');
-  // 高分屏适配（Retina 2x，像素风不糊）
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
   aqCanvas.width = AQ_W * dpr;
   aqCanvas.height = AQ_H * dpr;
@@ -348,190 +347,184 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   aqCanvas.style.height = AQ_H + 'px';
   aqCtx.scale(dpr, dpr);
 
-  // 鱼状态（含性格行为 + 过渡动画）
+  // 主题系统
+  var AQUA_THEMES = {
+    'default': { fishColor: null, deadColor: null, waterRGB: null, decorations: [] },
+    'winter':  { fishColor: '#dce4ec', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
+    'autumn':  { fishColor: '#f0d68a', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
+    'spring':  { fishColor: null, deadColor: null, waterRGB: '180,200,240', decorations: ['petals'] }
+  };
+  var activeTheme = AQUA_THEMES['default'];
+  var decoParticles = []; // 装饰粒子
+
+  // 鱼状态（含性格+过渡+悬停反应）
   var fish = {
-    x: 40, y: 50, tx: 40, ty: 50,
-    dir: 1, speed: 0.7, tail: 0,
+    x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
     dead: false, color: '#e6edf3', deadColor: '#6e7681',
-    state: 'swim',       // swim/idle/dart/hesitate/struggle/dying/dead/reviving
-    stateTimer: 0,       // 帧计数器
-    mouthPhase: 0,       // 嘴巴开合
-    pecPhase: 0,         // 胸鳍摆动
-    flipProgress: 0,     // 0=正常, 1=翻白肚（死亡/复活过渡）
-    dartCd: 0,           // 冲刺冷却
-    prevDir: 1           // 方向变化检测（涟漪）
+    state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
+    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0
   };
   var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255';
   var lastFishPeak = null, aqRaf = null;
 
+  // 鼠标悬停追踪
+  var cursorX = -1, cursorY = -1, cursorInTank = false;
+  aqCanvas.addEventListener('mousemove', function (e) {
+    var rect = aqCanvas.getBoundingClientRect();
+    cursorX = (e.clientX - rect.left) * (AQ_W / rect.width);
+    cursorY = (e.clientY - rect.top) * (AQ_H / rect.height);
+    cursorInTank = cursorX >= 0 && cursorX <= AQ_W && cursorY >= 0 && cursorY <= AQ_H;
+  });
+  aqCanvas.addEventListener('mouseleave', function () { cursorInTank = false; cursorX = -1; cursorY = -1; });
+
   // 水体系统
   var waves = [
-    { ph: 0,   amp: 1.0, freq: 0.16, spd: 14, dy: 0 },
+    { ph: 0, amp: 1.0, freq: 0.16, spd: 14, dy: 0 },
     { ph: 1.7, amp: 1.5, freq: 0.22, spd: 16, dy: 3 },
     { ph: 3.4, amp: 2.0, freq: 0.28, spd: 12, dy: 5 },
     { ph: 0.8, amp: 0.8, freq: 0.34, spd: 18, dy: 7 },
     { ph: 2.5, amp: 1.2, freq: 0.20, spd: 15, dy: 2 }
   ];
-  var caustics = [
-    { x: 30, ph: 0, spd: 0.3 },
-    { x: 80, ph: 2, spd: 0.4 },
-    { x: 120, ph: 4, spd: 0.25 }
+  var caustics = [{ x: 30, ph: 0, spd: 0.3 }, { x: 80, ph: 2, spd: 0.4 }, { x: 120, ph: 4, spd: 0.25 }];
+  var ripples = [], gravel = [], plants = [
+    { x: 12, seg: 5, ph: 0 }, { x: 138, seg: 4, ph: 1.5 }, { x: 130, seg: 3, ph: 3 }
   ];
-  var ripples = [];   // {x, y, r, maxR, alpha}
-  var gravel = [];    // 生成一次
-  var plants = [      // 水草
-    { x: 12, seg: 5, ph: 0 },
-    { x: 138, seg: 4, ph: 1.5 },
-    { x: 130, seg: 3, ph: 3 }
-  ];
-  var glassDrops = [  // 玻璃水珠
-    { x: 8, y: 15 }, { x: 142, y: 25 }, { x: 5, y: 60 },
-    { x: 135, y: 70 }, { x: 145, y: 10 }
-  ];
-  // 生成碎石
+  var glassDrops = [{ x: 8, y: 15 }, { x: 142, y: 25 }, { x: 5, y: 60 }, { x: 135, y: 70 }, { x: 145, y: 10 }];
   (function () {
-    for (var i = 0; i < 22; i++) {
-      gravel.push({
-        x: 5 + Math.random() * (AQ_W - 10),
-        y: AQ_H - 3 - Math.random() * 3,
-        sz: 1 + Math.floor(Math.random() * 2),
-        sh: Math.random() * 0.3
-      });
-    }
+    for (var i = 0; i < 22; i++) gravel.push({
+      x: 5 + Math.random() * (AQ_W - 10), y: AQ_H - 3 - Math.random() * 3,
+      sz: 1 + Math.floor(Math.random() * 2), sh: Math.random() * 0.3
+    });
   })();
 
-  // 气泡系统
-  var bubbles = [], burst = [], bubbleTimer = 0;
+  // 尘埃粒子（水中悬浮物）
+  var dust = [];
+  (function () {
+    for (var i = 0; i < 25; i++) dust.push({
+      x: Math.random() * AQ_W, y: Math.random() * AQ_H,
+      vx: (Math.random() - 0.5) * 0.08, vy: (Math.random() - 0.5) * 0.06,
+      sz: Math.random() < 0.5 ? 1 : 2, alpha: 0.12 + Math.random() * 0.12
+    });
+  })();
 
-  function addRipple(x, y) {
-    ripples.push({ x: x, y: y, r: 1, maxR: 8 + Math.random() * 6, alpha: 0.5 });
-  }
+  var bubbles = [], burst = [];
+
+  function addRipple(x, y) { ripples.push({ x: x, y: y, r: 1, maxR: 8 + Math.random() * 6, alpha: 0.5 }); }
   function burstBubbles() {
-    for (var i = 0; i < 12; i++) {
-      burst.push({
-        x: fish.x + (Math.random() * 30 - 15),
-        y: fish.y + (Math.random() * 12 - 6),
-        r: 1 + Math.random() * 2.5, vy: -(0.7 + Math.random()),
-        wobble: Math.random() * 6, alpha: 0.9
-      });
-    }
+    for (var i = 0; i < 12; i++) burst.push({
+      x: fish.x + (Math.random() * 30 - 15), y: fish.y + (Math.random() * 12 - 6),
+      r: 1 + Math.random() * 2.5, vy: -(0.7 + Math.random()), wobble: Math.random() * 6, alpha: 0.9
+    });
+  }
+  function spawnMouthBubbles(n) {
+    for (var i = 0; i < n; i++) bubbles.push({
+      x: fish.x + fish.dir * (6 + Math.random() * 3), y: fish.y - 2 + Math.random() * 2,
+      r: 1 + Math.random() * 1.5, vy: -(0.3 + Math.random() * 0.3), wobble: Math.random() * 6, alpha: 0.7
+    });
   }
 
-  // ---- 像素鱼绘制（升级版：尾鳍/胸鳍/鳞片/嘴巴） ----
+  // ---- 绘制函数 ----
   function drawPixelFish(ctx, x, y, dir, color, tailSwing, pecSwing, mouthOpen) {
-    ctx.save();
-    ctx.translate(Math.round(x), Math.round(y));
-    ctx.scale(dir, 1);
-    var c2 = '#c8d0d8'; // 浅色鳞片
-    // 尾鳍（独立摆动，更灵动）
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
     ctx.fillStyle = color;
     ctx.fillRect(-12, -1 + Math.round(tailSwing * 1.8), 3, 3);
     ctx.fillRect(-10, 0 + Math.round(tailSwing * 2.2), 2, 2);
     ctx.fillRect(-11, -2 + Math.round(tailSwing * 1.4), 2, 2);
-    // 身体主体
-    ctx.fillRect(-8, -3, 13, 6);
-    ctx.fillRect(-6, -4, 10, 8);
-    ctx.fillRect(-4, -5, 7, 10);
-    ctx.fillRect(-2, -5, 5, 10);
-    // 鳞片纹理（交替浅色块，像素风）
-    ctx.fillStyle = c2;
-    ctx.fillRect(-6, -2, 2, 2);
-    ctx.fillRect(-2, -3, 2, 2);
-    ctx.fillRect(2, -1, 2, 2);
-    ctx.fillRect(-4, 1, 2, 2);
-    ctx.fillRect(0, 2, 2, 2);
-    // 背鳍
+    ctx.fillRect(-8, -3, 13, 6); ctx.fillRect(-6, -4, 10, 8);
+    ctx.fillRect(-4, -5, 7, 10); ctx.fillRect(-2, -5, 5, 10);
+    ctx.fillStyle = '#c8d0d8';
+    ctx.fillRect(-6, -2, 2, 2); ctx.fillRect(-2, -3, 2, 2);
+    ctx.fillRect(2, -1, 2, 2); ctx.fillRect(-4, 1, 2, 2); ctx.fillRect(0, 2, 2, 2);
     ctx.fillStyle = color;
-    ctx.fillRect(-1, -7, 4, 2);
-    ctx.fillRect(0, -6, 3, 1);
-    // 胸鳍（小侧鳍，摆动）
-    var pecOff = Math.round(pecSwing * 1.5);
-    ctx.fillRect(2, 3 + pecOff, 2, 2);
-    ctx.fillRect(1, 4 + pecOff, 1, 2);
-    // 腹鳍
+    ctx.fillRect(-1, -7, 4, 2); ctx.fillRect(0, -6, 3, 1);
+    ctx.fillRect(2, 3 + Math.round(pecSwing * 1.5), 2, 2);
+    ctx.fillRect(1, 4 + Math.round(pecSwing * 1.5), 1, 2);
     ctx.fillRect(-3, 4, 2, 1);
-    // 嘴巴
-    if (mouthOpen) {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(6, -1, 2, 2);
-    } else {
-      ctx.fillRect(6, 0, 2, 1);
-    }
-    // 眼睛（高光点）
-    ctx.fillStyle = '#000';
-    ctx.fillRect(4, -3, 2, 2);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(4, -3, 1, 1);
+    if (mouthOpen) { ctx.fillStyle = '#000'; ctx.fillRect(6, -1, 2, 2); }
+    else { ctx.fillRect(6, 0, 2, 1); }
+    ctx.fillStyle = '#000'; ctx.fillRect(4, -3, 2, 2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
     ctx.restore();
   }
-
-  // 死鱼（翻白肚 + X 眼 + 沉底，flip 过渡）
   function drawDeadFish(ctx, x, y, color, flip) {
-    ctx.save();
-    ctx.translate(Math.round(x), Math.round(y));
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y));
     ctx.scale(1, 1 - flip * 2);
     ctx.globalAlpha = flip < 0.5 ? 0.6 + flip * 0.8 : 1;
     ctx.fillStyle = color;
-    ctx.fillRect(-8, -2, 12, 5);
-    ctx.fillRect(-6, -3, 10, 7);
-    ctx.fillRect(-4, -4, 7, 8);
-    ctx.fillRect(-10, -1, 3, 3);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(3, -2, 2, 2);
-    ctx.fillRect(5, 0, 2, 2);
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 10, 7);
+    ctx.fillRect(-4, -4, 7, 8); ctx.fillRect(-10, -1, 3, 3);
+    ctx.fillStyle = '#000'; ctx.fillRect(3, -2, 2, 2); ctx.fillRect(5, 0, 2, 2);
+    ctx.globalAlpha = 1; ctx.restore();
   }
-
-  // 圆形气泡（渐变 + 摇摆上升）
   function drawBubble(ctx, x, y, r, alpha) {
     var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
     grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.15) + ')');
     grad.addColorStop(0.7, 'rgba(200,230,255,' + (alpha * 0.4) + ')');
     grad.addColorStop(1, 'rgba(180,220,255,' + (alpha * 0.1) + ')');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
-
-  // 水草（像素风，逐段摇摆）
   function drawSeaweed(ctx, plant, waterTop, t) {
-    var px = plant.x, py = AQ_H - 2;
-    var segH = 6;
+    var px = plant.x, py = AQ_H - 2, segH = 6;
     ctx.fillStyle = 'rgba(' + waterRGB + ',0.55)';
     for (var s = 0; s < plant.seg; s++) {
       var sway = Math.sin(t * 0.8 + plant.ph + s * 0.6) * 2.5;
       ctx.fillRect(Math.round(px + sway), py - segH, 3, segH);
-      py -= segH - 1;
-      if (py < waterTop + 4) break;
+      py -= segH - 1; if (py < waterTop + 4) break;
     }
-    // 顶端小叶
     ctx.fillStyle = 'rgba(' + waterRGB + ',0.4)';
     ctx.fillRect(Math.round(px + sway - 1), py, 5, 2);
   }
 
+  // 装饰粒子绘制器
+  function drawDecoSnow(ctx, p) {
+    ctx.fillStyle = 'rgba(255,255,255,' + p.alpha + ')';
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+  }
+  function drawDecoLeaf(ctx, p) {
+    ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
+    ctx.rotate(p.rot || 0);
+    ctx.fillStyle = p.alpha > 0.3 ? 'rgba(200,120,40,' + p.alpha + ')' : 'rgba(160,100,30,' + p.alpha + ')';
+    ctx.fillRect(-2, -1, 4, 2); ctx.fillRect(-1, -2, 2, 4);
+    ctx.restore();
+  }
+  function drawDecoPetal(ctx, p) {
+    ctx.fillStyle = 'rgba(255,180,200,' + p.alpha + ')';
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    ctx.fillRect(Math.round(p.x) + 1, Math.round(p.y) - 1, 1, 1);
+  }
+
   // ---- 主动画循环 ----
   function aqTick() {
-    // 性能：页面不可见时跳过绘制
-    if (document.visibilityState === 'hidden') {
-      aqRaf = requestAnimationFrame(aqTick);
-      return;
-    }
+    if (document.visibilityState === 'hidden') { aqRaf = requestAnimationFrame(aqTick); return; }
     var t = Date.now() / 500;
     var waterTop = AQ_H - AQ_H * waterNow;
 
     // === 1. 鱼状态机 ===
-    fish.stateTimer++;
-    fish.mouthPhase += 0.15;
-    fish.pecPhase += 0.12;
+    fish.stateTimer++; fish.mouthPhase += 0.15; fish.pecPhase += 0.12;
     fish.dartCd = Math.max(0, fish.dartCd - 1);
+    if (fish.celebrate > 0) fish.celebrate--;
 
     if (!fish.dead && fish.state !== 'reviving') {
+      // 悬停反应：鱼好奇地朝鼠标靠近
+      if (cursorInTank && (fish.state === 'swim' || fish.state === 'idle')) {
+        var cdx = cursorX - fish.x, cdy = cursorY - fish.y;
+        var cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+        if (cdist < 60 && cdist > 8) {
+          // 缓慢靠近（好奇）
+          fish.tx += (cursorX - fish.tx) * 0.01;
+          fish.ty += (cursorY - fish.ty) * 0.01;
+        }
+        // 突然移入 → 受惊
+        if (cdist < 15 && fish.state === 'swim' && fish.dartCd <= 0) {
+          fish.state = 'dart'; fish.stateTimer = 0;
+          fish.dir = fish.x < AQ_W / 2 ? -1 : 1; // 逃向远离鼠标方向
+          fish.dartCd = 60;
+          addRipple(fish.x, fish.y);
+        }
+      }
+
       if (fish.state === 'swim') {
-        // 正常游泳：随机巡航，偶尔切 idle/dart
-        if (Math.random() < 0.012 ||
-            (Math.abs(fish.x - fish.tx) < 5 && Math.abs(fish.y - fish.ty) < 5)) {
+        if (Math.random() < 0.012 || (Math.abs(fish.x - fish.tx) < 5 && Math.abs(fish.y - fish.ty) < 5)) {
           fish.tx = 14 + Math.random() * (AQ_W - 28);
           var minY = Math.max(waterTop + 8, 14);
           fish.ty = minY + Math.random() * Math.max(6, (AQ_H - 10) - minY);
@@ -542,15 +535,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
             addRipple(fish.x, fish.y);
           }
         }
-        if (fish.x < 18 || fish.x > AQ_W - 18) {
-          fish.state = 'hesitate'; fish.stateTimer = 0;
-        }
+        if (fish.x < 18 || fish.x > AQ_W - 18) { fish.state = 'hesitate'; fish.stateTimer = 0; }
         var dx = fish.tx - fish.x, dy = fish.ty - fish.y;
         var dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 1) {
           var step = fish.speed;
-          fish.x += dx / dist * step;
-          fish.y += dy / dist * step;
+          fish.x += dx / dist * step; fish.y += dy / dist * step;
           if (Math.abs(dx) > 1) {
             if (fish.dir !== (dx > 0 ? 1 : -1)) addRipple(fish.x, fish.y);
             fish.dir = dx > 0 ? 1 : -1;
@@ -559,44 +549,33 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       } else if (fish.state === 'idle') {
         if (fish.stateTimer > 60 + Math.floor(Math.random() * 120)) {
           fish.state = 'swim';
-          if (Math.random() < 0.5) {
-            bubbles.push({ x: fish.x + fish.dir * 5, y: fish.y - 3, r: 1.5, vy: -0.4, wobble: Math.random() * 6, alpha: 0.6 });
-          }
+          if (Math.random() < 0.5) spawnMouthBubbles(1);
         }
         fish.y += Math.sin(t * 1.5) * 0.15;
       } else if (fish.state === 'dart') {
-        fish.x += fish.dir * fish.speed * 3.5;
-        fish.tail += 0.5;
+        fish.x += fish.dir * fish.speed * 3.5; fish.tail += 0.5;
         if (fish.stateTimer > 30 || fish.x < 14 || fish.x > AQ_W - 14) {
           fish.state = 'swim'; fish.stateTimer = 0;
-          fish.dir = -fish.dir;
-          addRipple(fish.x, fish.y);
+          fish.dir = -fish.dir; addRipple(fish.x, fish.y);
           fish.tx = fish.x; fish.ty = fish.y;
         }
       } else if (fish.state === 'hesitate') {
         fish.speed = Math.max(0.2, fish.speed * 0.92);
         if (fish.stateTimer > 20) {
-          fish.dir = -fish.dir;
-          fish.state = 'swim'; fish.stateTimer = 0;
+          fish.dir = -fish.dir; fish.state = 'swim'; fish.stateTimer = 0;
           fish.tx = AQ_W / 2 + (Math.random() - 0.5) * 60;
         }
       } else if (fish.state === 'struggle') {
         fish.speed = 0.3 + Math.random() * 1.5;
-        fish.x += (Math.random() - 0.5) * 3;
-        fish.y += (Math.random() - 0.5) * 2;
+        fish.x += (Math.random() - 0.5) * 3; fish.y += (Math.random() - 0.5) * 2;
         fish.dir = Math.random() < 0.5 ? -1 : 1;
-        if (fish.stateTimer > 100) {
-          fish.state = 'dying'; fish.stateTimer = 0;
-        }
+        if (fish.stateTimer > 100) { fish.state = 'dying'; fish.stateTimer = 0; }
       } else if (fish.state === 'dying') {
+        if (fish.stateTimer <= 6) spawnMouthBubbles(1); // 最后的呼吸
         fish.flipProgress = Math.min(1, fish.stateTimer / 90);
         fish.y += 0.3;
-        if (fish.flipProgress >= 1) {
-          fish.dead = true; fish.state = 'dead';
-          fish.flipProgress = 1;
-        }
+        if (fish.flipProgress >= 1) { fish.dead = true; fish.state = 'dead'; fish.flipProgress = 1; }
       }
-      // 硬性约束
       if (fish.y < waterTop + 4) fish.y = waterTop + 4;
       if (fish.y > AQ_H - 8) fish.y = AQ_H - 8;
       fish.x = Math.max(12, Math.min(AQ_W - 12, fish.x));
@@ -605,91 +584,131 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 复活过渡
     if (fish.state === 'reviving') {
       fish.flipProgress = Math.max(0, 1 - fish.stateTimer / 90);
-      if (fish.stateTimer > 20 && fish.stateTimer % 8 < 3) {
-        fish.x += (Math.random() - 0.5) * 2;
+      if (fish.stateTimer <= 30) {
+        fish.mouthPhase = 3; // 嘴巴大张
+        if (fish.stateTimer === 1) burstBubbles(); // 气泡爆发
+        if (fish.stateTimer % 6 < 3) fish.x += (Math.random() - 0.5) * 3; // 剧烈抖动
       }
       if (fish.flipProgress <= 0) {
-        fish.state = 'swim'; fish.stateTimer = 0;
-        fish.dead = false;
-        fish.flipProgress = 0;
+        fish.state = 'swim'; fish.stateTimer = 0; fish.dead = false; fish.flipProgress = 0;
+        fish.celebrate = 40; // 庆祝冲刺
+        fish.dir = Math.random() < 0.5 ? 1 : -1;
+        addRipple(fish.x, fish.y);
       }
     }
-    // 速度随水位
-    if (!fish.dead && fish.state === 'swim') {
+    // 庆祝冲刺
+    if (fish.celebrate > 0 && !fish.dead) {
+      fish.x += fish.dir * 1.8;
+      if (fish.x < 14 || fish.x > AQ_W - 14) fish.dir = -fish.dir;
+      fish.x = Math.max(12, Math.min(AQ_W - 12, fish.x));
+    }
+    if (!fish.dead && fish.state === 'swim' && fish.celebrate <= 0) {
       fish.speed = 0.35 + waterNow * 0.7;
     }
 
-    // === 2. 气泡更新 ===
+    // === 2. 气泡 ===
     if (!fish.dead && Math.random() < 0.025) {
       var br = 1 + Math.random() * 3;
       bubbles.push({
-        x: fish.x - fish.dir * 6 + (Math.random() * 10 - 5),
-        y: fish.y + 3,
-        r: br, vy: -(0.2 + br * 0.12),
-        wobble: Math.random() * 6, alpha: 0.6
+        x: fish.x - fish.dir * 6 + (Math.random() * 10 - 5), y: fish.y + 3,
+        r: br, vy: -(0.2 + br * 0.12), wobble: Math.random() * 6, alpha: 0.6
       });
     }
     for (var bi = bubbles.length - 1; bi >= 0; bi--) {
-      var b = bubbles[bi];
-      b.y += b.vy; b.x += Math.sin(t * 2 + b.wobble) * 0.3; b.alpha -= 0.003;
+      var b = bubbles[bi]; b.y += b.vy; b.x += Math.sin(t * 2 + b.wobble) * 0.3; b.alpha -= 0.003;
       if (b.y < 2 || b.alpha <= 0) bubbles.splice(bi, 1);
     }
     for (var bj = burst.length - 1; bj >= 0; bj--) {
-      var bb = burst[bj];
-      bb.y += bb.vy; bb.x += Math.sin(t * 2 + bb.wobble) * 0.2; bb.alpha -= 0.018;
+      var bb = burst[bj]; bb.y += bb.vy; bb.x += Math.sin(t * 2 + bb.wobble) * 0.2; bb.alpha -= 0.018;
       if (bb.y < 0 || bb.alpha <= 0) burst.splice(bj, 1);
     }
 
-    // === 3. 涟漪更新 ===
+    // === 3. 涟漪 ===
     for (var ri = ripples.length - 1; ri >= 0; ri--) {
-      var rp = ripples[ri];
-      rp.r += 0.3; rp.alpha -= 0.02;
+      var rp = ripples[ri]; rp.r += 0.3; rp.alpha -= 0.02;
       if (rp.alpha <= 0) ripples.splice(ri, 1);
     }
 
-    // === 4. 水位缓动 ===
+    // === 4. 尘埃粒子 ===
+    for (var di = 0; di < dust.length; di++) {
+      var d = dust[di];
+      d.x += d.vx + Math.sin(t * 0.3 + di) * 0.02;
+      d.y += d.vy + Math.cos(t * 0.2 + di * 1.3) * 0.015;
+      if (d.x < 2) d.x = AQ_W - 2; if (d.x > AQ_W - 2) d.x = 2;
+      if (d.y < waterTop + 2) d.vy = Math.abs(d.vy);
+      if (d.y > AQ_H - 2) d.vy = -Math.abs(d.vy);
+    }
+
+    // === 5. 装饰粒子（主题） ===
+    var decoType = activeTheme.decorations.length > 0 ? activeTheme.decorations[0] : null;
+    if (decoType && waterNow > 0.1) {
+      if (decoParticles.length < 18 && Math.random() < 0.06) {
+        var np = { x: Math.random() * AQ_W, y: -4, vx: 0, vy: 0, alpha: 0.6 + Math.random() * 0.3, rot: 0, type: decoType };
+        if (decoType === 'snow') { np.vy = 0.15 + Math.random() * 0.1; np.vx = (Math.random() - 0.5) * 0.05; }
+        else if (decoType === 'leaves') { np.vy = 0.12 + Math.random() * 0.08; np.vx = 0.08 + Math.random() * 0.06; np.rot = Math.random() * 3; }
+        else if (decoType === 'petals') { np.vy = 0.08 + Math.random() * 0.06; np.vx = (Math.random() - 0.5) * 0.04; }
+        decoParticles.push(np);
+      }
+      for (var dk = decoParticles.length - 1; dk >= 0; dk--) {
+        var dp = decoParticles[dk];
+        dp.y += dp.vy; dp.x += dp.vx + Math.sin(t + dk) * 0.02;
+        if (decoType === 'leaves') dp.rot += 0.02;
+        dp.alpha -= 0.001;
+        if (dp.y > waterTop - 2 || dp.alpha <= 0) { decoParticles.splice(dk, 1); }
+      }
+    } else { decoParticles = []; }
+
+    // === 6. 水位缓动 ===
     waterNow += (waterTarget - waterNow) * 0.04;
 
-    // === 5. 绘制 ===
+    // === 7. 绘制 ===
     aqCtx.clearRect(0, 0, AQ_W, AQ_H);
 
     // 碎石
+    aqCtx.globalAlpha = 0.5;
     for (var gi = 0; gi < gravel.length; gi++) {
-      var gp = gravel[gi];
-      var gs = Math.floor(60 + gp.sh * 30);
+      var gp = gravel[gi]; var gs = Math.floor(60 + gp.sh * 30);
       aqCtx.fillStyle = 'rgb(' + gs + ',' + (gs + 10) + ',' + (gs + 25) + ')';
-      aqCtx.globalAlpha = 0.5;
       aqCtx.fillRect(Math.round(gp.x), Math.round(gp.y), gp.sz, gp.sz);
     }
     aqCtx.globalAlpha = 1;
 
     var wh = AQ_H * waterNow;
     if (wh > 1) {
+      // 光束（对角，非常淡）
+      var beamX = 20 + Math.sin(t * 0.15) * 10;
+      var beamAlpha = 0.025 + Math.sin(t * 0.4) * 0.008;
+      aqCtx.fillStyle = 'rgba(255,255,255,' + beamAlpha + ')';
+      aqCtx.beginPath();
+      aqCtx.moveTo(beamX, AQ_H - wh); aqCtx.lineTo(beamX + 8, AQ_H - wh);
+      aqCtx.lineTo(beamX + 35, AQ_H); aqCtx.lineTo(beamX + 25, AQ_H);
+      aqCtx.closePath(); aqCtx.fill();
+      aqCtx.fillStyle = 'rgba(255,255,255,' + (beamAlpha * 0.7) + ')';
+      aqCtx.beginPath();
+      aqCtx.moveTo(beamX + 60, AQ_H - wh); aqCtx.lineTo(beamX + 66, AQ_H - wh);
+      aqCtx.lineTo(beamX + 85, AQ_H); aqCtx.lineTo(beamX + 77, AQ_H);
+      aqCtx.closePath(); aqCtx.fill();
+
       // 水体渐变
       var grad = aqCtx.createLinearGradient(0, AQ_H - wh, 0, AQ_H);
       grad.addColorStop(0, 'rgba(' + waterRGB + ',0.52)');
       grad.addColorStop(1, 'rgba(' + waterRGB + ',0.18)');
-      aqCtx.fillStyle = grad;
-      aqCtx.fillRect(0, AQ_H - wh, AQ_W, wh);
+      aqCtx.fillStyle = grad; aqCtx.fillRect(0, AQ_H - wh, AQ_W, wh);
 
-      // 光影 caustics
+      // caustics
       for (var ci = 0; ci < caustics.length; ci++) {
         var cs = caustics[ci];
-        var cx = cs.x + Math.sin(t * cs.spd + cs.ph) * 15;
-        var cy = AQ_H - 4 + Math.cos(t * cs.spd * 0.7 + cs.ph) * 2;
         aqCtx.fillStyle = 'rgba(255,255,255,0.06)';
         aqCtx.beginPath();
-        aqCtx.ellipse(cx, cy, 6, 3, Math.sin(t * 0.3 + cs.ph) * 0.5, 0, Math.PI * 2);
+        aqCtx.ellipse(cs.x + Math.sin(t * cs.spd + cs.ph) * 15, AQ_H - 4 + Math.cos(t * cs.spd * 0.7 + cs.ph) * 2, 6, 3, Math.sin(t * 0.3 + cs.ph) * 0.5, 0, Math.PI * 2);
         aqCtx.fill();
       }
 
-      // 5 层波浪线
+      // 5 层波浪
       for (var wi = 0; wi < waves.length; wi++) {
-        var w = waves[wi];
-        var baseY = AQ_H - wh + w.dy;
+        var w = waves[wi], baseY = AQ_H - wh + w.dy;
         aqCtx.strokeStyle = 'rgba(' + waterRGB + ',' + (0.22 + wi * 0.08) + ')';
-        aqCtx.lineWidth = 1;
-        aqCtx.beginPath();
+        aqCtx.lineWidth = 1; aqCtx.beginPath();
         for (var wx = 0; wx <= AQ_W; wx += 3) {
           var wy = baseY + Math.sin((wx + t * w.spd) * w.freq + w.ph) * w.amp;
           if (wx === 0) aqCtx.moveTo(wx, wy); else aqCtx.lineTo(wx, wy);
@@ -701,81 +720,78 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       var shift = (t * 26) % (AQ_W + 80) - 40;
       aqCtx.fillStyle = 'rgba(255,255,255,0.04)';
       aqCtx.beginPath();
-      aqCtx.moveTo(shift - 14, AQ_H - wh);
-      aqCtx.lineTo(shift + 10, AQ_H - wh);
-      aqCtx.lineTo(shift + 30, AQ_H);
-      aqCtx.lineTo(shift + 6, AQ_H);
-      aqCtx.closePath();
-      aqCtx.fill();
+      aqCtx.moveTo(shift - 14, AQ_H - wh); aqCtx.lineTo(shift + 10, AQ_H - wh);
+      aqCtx.lineTo(shift + 30, AQ_H); aqCtx.lineTo(shift + 6, AQ_H);
+      aqCtx.closePath(); aqCtx.fill();
 
-      // 高光闪动点
+      // 高光点
       for (var si = 0; si < 3; si++) {
-        var sx = ((t * 22 + si * 55) % (AQ_W + 20)) - 10;
-        var sy = AQ_H - wh + 2 + Math.sin(t * 2 + si * 2.1) * 2;
         aqCtx.fillStyle = 'rgba(255,255,255,0.10)';
-        aqCtx.fillRect(Math.round(sx), Math.round(sy), 3, 2);
+        aqCtx.fillRect(Math.round(((t * 22 + si * 55) % (AQ_W + 20)) - 10), Math.round(AQ_H - wh + 2 + Math.sin(t * 2 + si * 2.1) * 2), 3, 2);
       }
+
+      // 水面张力（meniscus）
+      aqCtx.fillStyle = 'rgba(' + waterRGB + ',0.4)';
+      aqCtx.fillRect(0, AQ_H - wh - 2, 3, 3);
+      aqCtx.fillRect(0, AQ_H - wh - 1, 2, 2);
+      aqCtx.fillRect(AQ_W - 3, AQ_H - wh - 2, 3, 3);
+      aqCtx.fillRect(AQ_W - 2, AQ_H - wh - 1, 2, 2);
 
       // 涟漪
       for (var rj = 0; rj < ripples.length; rj++) {
         var rr = ripples[rj];
         aqCtx.strokeStyle = 'rgba(255,255,255,' + Math.max(0, rr.alpha) + ')';
-        aqCtx.lineWidth = 1;
-        aqCtx.beginPath();
-        aqCtx.arc(rr.x, rr.y, rr.r, 0, Math.PI * 2);
-        aqCtx.stroke();
+        aqCtx.lineWidth = 1; aqCtx.beginPath(); aqCtx.arc(rr.x, rr.y, rr.r, 0, Math.PI * 2); aqCtx.stroke();
       }
 
       // 水草
-      for (var pi = 0; pi < plants.length; pi++) {
-        drawSeaweed(aqCtx, plants[pi], waterTop, t);
+      for (var pi = 0; pi < plants.length; pi++) drawSeaweed(aqCtx, plants[pi], waterTop, t);
+    }
+
+    // 尘埃粒子（有水时）
+    if (waterNow > 0.1) {
+      for (var dd = 0; dd < dust.length; dd++) {
+        var dp2 = dust[dd];
+        aqCtx.fillStyle = 'rgba(255,255,255,' + dp2.alpha + ')';
+        aqCtx.fillRect(Math.round(dp2.x), Math.round(dp2.y), dp2.sz, dp2.sz > 1 ? 1 : dp2.sz);
       }
     }
 
-    // 气泡（圆形渐变）
-    for (var bk = 0; bk < bubbles.length; bk++) {
-      var bc = bubbles[bk];
-      drawBubble(aqCtx, bc.x, bc.y, bc.r, Math.max(0, bc.alpha));
-    }
-    for (var bl = 0; bl < burst.length; bl++) {
-      var bt = burst[bl];
-      drawBubble(aqCtx, bt.x, bt.y, bt.r, Math.max(0, bt.alpha));
+    // 装饰粒子
+    for (var dm = 0; dm < decoParticles.length; dm++) {
+      var dpp = decoParticles[dm];
+      if (dpp.type === 'snow') drawDecoSnow(aqCtx, dpp);
+      else if (dpp.type === 'leaves') drawDecoLeaf(aqCtx, dpp);
+      else if (dpp.type === 'petals') drawDecoPetal(aqCtx, dpp);
     }
 
-    // 鱼（死/挣扎/复活/正常）
+    // 气泡
+    for (var bk = 0; bk < bubbles.length; bk++) drawBubble(aqCtx, bubbles[bk].x, bubbles[bk].y, bubbles[bk].r, Math.max(0, bubbles[bk].alpha));
+    for (var bl = 0; bl < burst.length; bl++) drawBubble(aqCtx, burst[bl].x, burst[bl].y, burst[bl].r, Math.max(0, burst[bl].alpha));
+
+    // 鱼
     if (fish.dead || fish.state === 'dying') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress);
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else {
-      var mouthOpen = Math.sin(fish.mouthPhase) > 0.7;
-      var pecSwing = Math.sin(fish.pecPhase) * 1.5;
       drawPixelFish(aqCtx, fish.x, fish.y, fish.dir, fish.color,
-        Math.sin(fish.tail) * 1.5, pecSwing, mouthOpen);
+        Math.sin(fish.tail) * 1.5, Math.sin(fish.pecPhase) * 1.5, Math.sin(fish.mouthPhase) > 0.7);
     }
 
     // 玻璃效果
-    // L 形边角高光
     aqCtx.fillStyle = 'rgba(255,255,255,0.08)';
     aqCtx.fillRect(2, 2, 8, 1); aqCtx.fillRect(2, 2, 1, 6);
     aqCtx.fillRect(AQ_W - 10, AQ_H - 3, 8, 1); aqCtx.fillRect(AQ_W - 3, AQ_H - 9, 1, 7);
-    // 玻璃水珠
     aqCtx.fillStyle = 'rgba(255,255,255,0.07)';
-    for (var di = 0; di < glassDrops.length; di++) {
-      aqCtx.fillRect(glassDrops[di].x, glassDrops[di].y, 2, 2);
-    }
-    // 暗角（上下+左右微暗）
+    for (var dgi = 0; dgi < glassDrops.length; dgi++) aqCtx.fillRect(glassDrops[dgi].x, glassDrops[dgi].y, 2, 2);
     var vg1 = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
-    vg1.addColorStop(0, 'rgba(0,0,0,0.06)');
-    vg1.addColorStop(0.08, 'rgba(0,0,0,0)');
-    vg1.addColorStop(0.92, 'rgba(0,0,0,0)');
-    vg1.addColorStop(1, 'rgba(0,0,0,0.06)');
+    vg1.addColorStop(0, 'rgba(0,0,0,0.06)'); vg1.addColorStop(0.08, 'rgba(0,0,0,0)');
+    vg1.addColorStop(0.92, 'rgba(0,0,0,0)'); vg1.addColorStop(1, 'rgba(0,0,0,0.06)');
     aqCtx.fillStyle = vg1; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
     var vg2 = aqCtx.createLinearGradient(0, 0, AQ_W, 0);
-    vg2.addColorStop(0, 'rgba(0,0,0,0.05)');
-    vg2.addColorStop(0.06, 'rgba(0,0,0,0)');
-    vg2.addColorStop(0.94, 'rgba(0,0,0,0)');
-    vg2.addColorStop(1, 'rgba(0,0,0,0.05)');
+    vg2.addColorStop(0, 'rgba(0,0,0,0.05)'); vg2.addColorStop(0.06, 'rgba(0,0,0,0)');
+    vg2.addColorStop(0.94, 'rgba(0,0,0,0)'); vg2.addColorStop(1, 'rgba(0,0,0,0.05)');
     aqCtx.fillStyle = vg2; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
 
     aqRaf = requestAnimationFrame(aqTick);
@@ -858,6 +874,14 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 主题色（跟随主站 CSS 变量，不用硬编码）
     fish.color = themeColor('--text', '#e6edf3');
     fish.deadColor = themeColor('--text-tertiary', '#6e7681');
+
+    // 主题系统解析
+    var _themeName = window.__AQUA_THEME__ || 'default';
+    activeTheme = AQUA_THEMES[_themeName] || AQUA_THEMES['default'];
+    if (activeTheme.fishColor) fish.color = activeTheme.fishColor;
+    if (activeTheme.deadColor) fish.deadColor = activeTheme.deadColor;
+    if (activeTheme.waterRGB) waterRGB = activeTheme.waterRGB;
+
     waterRGB = hexToRgb(themeColor('--accent', '#58a6ff'));
     // 水位 = 当前谷时段剩余比例（谷开始满水，谷结束水干）；峰=0 水干
     waterTarget = peak ? 0 : waterLevelFor(p);
