@@ -1,7 +1,7 @@
 {
   "name": "aqua-deepseek",
-  "version": "1.0.6",
-  "description": "🐟 像素鱼缸 DeepSeek API 价格浮窗 — HD 插件 + 独立网页组件",
+  "version": "2.0.0",
+  "description": "DeepSeek API 实时价格鱼缸浮窗 — 一键装进 DeepSeek Harness (HD)，像素风陪伴式动画，自动跟随峰谷时段",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -9,12 +9,14 @@
   },
   "keywords": [
     "deepseek",
-    "pricing",
-    "widget",
+    "deepseek-harness",
+    "dsh-plugin",
+    "pricing-widget",
     "pixel-fish",
     "aquarium",
-    "dsh-plugin",
-    "deepseek-harness"
+    "realtime-pricing",
+    "peak-offpeak",
+    "aqua"
   ],
   "author": "LiJiaChuan (xiaoyu7044)",
   "license": "MIT",

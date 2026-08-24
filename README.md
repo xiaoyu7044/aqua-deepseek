@@ -1,45 +1,74 @@
-# 🐟 Aqua DeepSeek — 像素鱼缸 DeepSeek 价格浮窗
+# 🐟 Aqua DeepSeek — DeepSeek API 实时价格鱼缸浮窗
 
-一条住在像素鱼缸里的自由游动的鱼，实时显示 [DeepSeek API](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 的峰谷价格。
+一条住在像素鱼缸里的自由游动的鱼，实时显示 [DeepSeek API](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 的峰谷价格。**一键装进 DeepSeek Harness (HD)**，也可以独立嵌入任何网页。
 
 > 灵感来自 [silicon-fish-clock](https://github.com/Gayaya999/silicon-fish-clock)
 > — 一款住在透明像素鱼缸里的桌面任务计时器。
-> Aqua DeepSeek 把"像素鱼缸陪伴式"的理念搬到了网页端。
 
 <details>
 <summary>🌐 English</summary>
 
 A pixel-fish aquarium that lives in your webpage's corner, showing real-time
 [DeepSeek API](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) pricing
-with peak/off-peak visual feedback.
+with peak/off-peak visual feedback. Install into [DeepSeek Harness (HD)](https://deepseek.com)
+with one command, or embed standalone in any webpage.
 
 > **Inspired by** [silicon-fish-clock](https://github.com/Gayaya999/silicon-fish-clock).
 
-### Quick start
+### Quick start (standalone)
 
 ```html
 <script src="deepseek-price-widget.js"></script>
 ```
 
-Drop this single line at the bottom of any HTML `<body>`. A fish aquarium
-appears with builtin pricing defaults — no backend required.
+### Install into DeepSeek Harness
+
+```bash
+dsh plugin --profile web add aqua-deepseek
+dsh plugin --profile headless add aqua-deepseek
+systemctl --user restart dsh-web
+```
+
+The fish tank appears in HD's bottom-right corner with a matching light theme.
 
 ### Features
 
-- Fish swims freely in blue water; water level = remaining off-peak time
-- Peak hours: water drains, fish dies (belly-up); revives when off-peak returns
-- Desktop (>768px) = aquarium mode; mobile (≤768px) = pill capsule fallback
-- Draggable, clamped to viewport, panel never overlaps the widget
-- Follows host page theme via CSS custom properties
+- Fish swims freely; water level = remaining off-peak time
+- Peak: water drains, fish dies (belly-up); off-peak: water rises, fish revives
+- Desktop = aquarium; mobile (≤768px) = pill capsule
+- Draggable, viewport-clamped, panel never overlaps widget
+- Auto-detects page theme (dark/light) via CSS custom properties
+- HD plugin: white background, dark fish, blue water — matches DeepSeek Harness UI
 
 ### Optional: auto-update pricing
 
 ```bash
 python3 scripts/fetch_pricing.py --out ds_price_config.json
-# Serve the JSON at /api/ds-price-config with any backend
+# Serve JSON at /api/ds-price-config with any backend
 ```
 
 </details>
+
+---
+
+## 🚀 DeepSeek Harness (HD) 插件
+
+**一行命令装进 HD，鱼缸自动出现在 HD 界面右下角：**
+
+```bash
+dsh plugin --profile web add aqua-deepseek
+dsh plugin --profile headless add aqua-deepseek
+systemctl --user restart dsh-web
+```
+
+| HD 内效果 | 配套说明 |
+|:---:|:---|
+| ![HD 鱼缸](docs/preview-hd.png) | 白底深色鱼蓝水，自动匹配 HD 浅色主题 |
+
+插件做了三件事：
+1. **注入鱼缸浮窗** — 通过 `webserver/index-inject` 把浮窗脚本注入 HD 页面
+2. **注入主题 CSS** — 覆盖 CSS 变量让浮窗匹配 HD 的白色主题
+3. **注册 `aqua_price` 工具** — AI 可查询 DeepSeek 实时价格/获取嵌入码/切换主题
 
 ---
 
@@ -60,7 +89,9 @@ python3 scripts/fetch_pricing.py --out ds_price_config.json
 | ![面板](docs/preview-panel.png) | ![移动端](docs/preview-mobile.png) |
 | 点击鱼缸展开价格面板 | 移动端自动回退为胶囊模式 |
 
-## 快速开始
+---
+
+## 快速开始（独立网页）
 
 **一行引入，放 `<body>` 底部，零后端依赖，开箱即用：**
 
@@ -68,7 +99,7 @@ python3 scripts/fetch_pricing.py --out ds_price_config.json
 <script src="deepseek-price-widget.js"></script>
 ```
 
-右下角就会出现鱼缸浮窗，使用内置默认价格，不需要任何后端服务。
+右下角出现鱼缸浮窗，使用内置默认价格，不需要后端。
 
 ## 行为说明
 
@@ -79,10 +110,10 @@ python3 scripts/fetch_pricing.py --out ds_price_config.json
 
 - **桌面端**（>768px）= 鱼缸陪伴模式；**移动端**（≤768px）= 胶囊模式自动回退
 - 浮窗可拖动，**永远不超出窗口**，面板**不与浮窗重叠**
-- 跟随主站主题色（CSS 变量），支持明暗主题
+- 跟随主站主题色（CSS 变量），自动适配明暗主题
 - 关闭后本次会话不再显示，重开浏览器恢复
 - 鱼会好奇靠近鼠标，受惊时冲刺逃走
-- 死亡时嘴里冒出最后的气泡，复活时气泡爆发+庆祝冲刺
+- 死亡时嘴里冒出最后的气泡，复活时气泡爆发 + 庆祝冲刺
 - 水中有尘埃微粒漂浮、顶部光束斜射、水面贴壁微微上弯（张力）
 
 ## 主题系统
@@ -100,10 +131,11 @@ window.__AQUA_THEME__ = 'winter';
 | `winter` | 冬季 | 冰白 | 冰蓝 | ❄️ 雪花飘落 |
 | `autumn` | 秋季 | 暖黄 | 琥珀 | 🍂 落叶飘零 |
 | `spring` | 春季 | 白色 | 浅蓝 | 🌸 樱花瓣 |
+| `hd` | HD 插件 | 深色 `#1a1d21` | 蓝色 `65,118,230` | 无 |
 
 后端配置也可指定主题：`ds_price_config.json` 中加 `"theme": "winter"` 字段。
 
-自定义主题：直接修改 `AQUA_THEMES` 对象（在 widget JS 中），支持 `fishColor`/`deadColor`/`waterRGB`/`decorations` 四个字段。`decorations` 数组支持 `'snow'`/`'leaves'`/`'petals'`，可扩展新的粒子效果。
+自定义主题：直接修改 `AQUA_THEMES` 对象或通过 `window.AQUA_THEMES` 注入，支持 `fishColor`/`deadColor`/`waterRGB`/`decorations` 四个字段。`decorations` 数组支持 `'snow'`/`'leaves'`/`'petals'`，可扩展新的粒子效果。
 
 ## 自动更新价格（可选）
 
@@ -113,12 +145,11 @@ window.__AQUA_THEME__ = 'winter';
 python3 scripts/fetch_pricing.py --out ds_price_config.json
 ```
 
-然后用任意后端服务在 `/api/ds-price-config` 返回这个 JSON。没有后端也能用——内置默认价格永远兜底。
+然后用任意后端在 `/api/ds-price-config` 返回这个 JSON。没有后端也能用——内置默认价格永远兜底。
 
 **部署示例：**
 
 ```bash
-# 简易后端（标准库，无需 Flask）
 cd examples
 python3 server.py --port 8080
 # 浏览器打开 http://localhost:8080
@@ -129,11 +160,14 @@ python3 server.py --port 8080
 ```
 aqua-deepseek/
 ├── deepseek-price-widget.js       # 前端浮窗（自包含，Shadow DOM 隔离）
+├── index.ts                       # HD 插件入口（Cordis，注册工具+注入浮窗）
+├── cordis.patch.yml               # HD bundle 插件注册
+├── package.json                   # npm 包（含 dsh bundle 元数据）
 ├── scripts/
 │   └── fetch_pricing.py           # DeepSeek 官网价格自动抓取
 ├── examples/
 │   ├── index.html                 # 演示页面
-│   ├── server.py                  # 简易后端（提供价格配置接口）
+│   ├── server.py                  # 简易后端
 │   └── ds_price_config.example.json
 ├── docs/                          # 预览截图
 ├── LICENSE                        # MIT
@@ -149,6 +183,7 @@ aqua-deepseek/
 | `models` | 模型价格（flash/pro，含 cacheHit/cacheMiss/output × peak/off） |
 | `segments` | 高峰时段，如 `[[9,12],[14,18]]` |
 | `weekendOff` | 周末是否全天半价 |
+| `theme` | 主题名（default/winter/autumn/spring/hd） |
 
 ## 许可
 
