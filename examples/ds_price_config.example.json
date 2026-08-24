@@ -1,0 +1,23 @@
+{
+  "models": {
+    "flash": {
+      "name": "DeepSeek-V4-Flash",
+      "ver": "0731",
+      "cacheHit": { "off": 0.05, "peak": 0.10 },
+      "cacheMiss": { "off": 1.50, "peak": 3.00 },
+      "output":    { "off": 4.50, "peak": 9.00 }
+    },
+    "pro": {
+      "name": "DeepSeek-V4-Pro",
+      "ver": "0813",
+      "cacheHit": { "off": 0.15, "peak": 0.30 },
+      "cacheMiss": { "off": 4.50, "peak": 9.00 },
+      "output":    { "off": 13.50, "peak": 27.00 }
+    }
+  },
+  "segments": [[9, 12], [14, 18]],
+  "weekendOff": true,
+  "updated": "2026-08-24T08:00:00+08:00",
+  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "note": "示例配置，运行 scripts/fetch_pricing.py 获取最新价格"
+}
