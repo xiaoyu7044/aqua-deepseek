@@ -352,10 +352,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   // 主题系统
   var AQUA_THEMES = {
-    'default': { fishColor: null, deadColor: null, waterRGB: null, decorations: [], fishBelly: null, fishFin: null, fishStripe: null, fishEye: null },
-    'winter':  { fishColor: '#dce4ec', fishBelly: '#c3d5e3', fishFin: '#a8c4da', fishStripe: '#eef4f9', fishEye: '#3a4a5a', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
-    'autumn':  { fishColor: '#f0d68a', fishBelly: '#e4bc6c', fishFin: '#b8864a', fishStripe: '#c08848', fishEye: '#5a4020', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
-    'spring':  { fishColor: null, deadColor: null, waterRGB: '180,200,240', decorations: ['petals'], fishBelly: null, fishFin: null, fishStripe: null, fishEye: null }
+    // 鱼配色搭配接口：fishColor(身) / fishFin(鳍) / fishTail(尾) / fishBelly(腹) / fishEye(眼) / fishHighlight(高光)
+    // 未配的场位默认=身色(纯色主体)；窗口可用 window.AQUA_THEMES 注入/覆盖自定义主题
+    'default': { fishColor: null, fishFin: null, fishTail: null, fishBelly: null, fishEye: null, fishHighlight: null, deadColor: null, waterRGB: null, decorations: [] },
+    'winter':  { fishColor: '#dce4ec', fishFin: '#a8c4da', fishTail: '#b8cede', fishBelly: '#c3d5e3', fishEye: '#3a4a5a', fishHighlight: 'rgba(255,255,255,0.4)', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
+    'autumn':  { fishColor: '#f0d68a', fishFin: '#b8864a', fishTail: '#a97a3c', fishBelly: '#e4bc6c', fishEye: '#5a4020', fishHighlight: 'rgba(255,255,255,0.3)', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
+    'spring':  { fishColor: '#f6e8ee', fishFin: '#b7d7ee', fishTail: '#cfe4f5', fishBelly: '#f6c9d8', fishEye: '#3a4a5a', fishHighlight: 'rgba(255,255,255,0.4)', deadColor: '#8b8b93', waterRGB: '180,200,240', decorations: ['petals'] }
   };
   var activeTheme = AQUA_THEMES['default'];
   var decoParticles = []; // 装饰粒子
@@ -363,7 +365,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   // 鱼状态（含性格+过渡+悬停反应）
   var fish = {
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
-    dead: false, color: '#e6edf3', belly: '#a8b4c0', fin: '#8b949e', stripe: null, eyeColor: '#000', deadColor: '#6e7681',
+    dead: false, color: '#e6edf3', belly: null, fin: null, tail: null, stripe: null, highlight: null, eyeColor: '#000', deadColor: '#6e7681',
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
     flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false
   };
@@ -633,17 +635,36 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   ];
   var caustics = [{ x: 30, ph: 0, spd: 0.3 }, { x: 80, ph: 2, spd: 0.4 }, { x: 120, ph: 4, spd: 0.25 }];
   var ripples = [], gravel = [], plants = [];
-  var PLANT_COL = ['#1f5c3a', '#2a6e46', '#1b4d31', '#2f7f52', '#174234'];
+  // 水草层次：前景深绿大株 / 中景 / 后景淡绿小株，簇状分布 + 稀疏单株穿插
+  var PLANT_LVL = [
+    { col: ['#174234', '#1b4d31'], hMin: 16, hMax: 28, stems: [1, 2], sw: 1.0 },   // 前景 深绿 高
+    { col: ['#2a6e46', '#1f5c3a'], hMin: 12, hMax: 20, stems: [1, 2], sw: 0.9 },   // 中景
+    { col: ['#2f7f52', '#3b8a5f'], hMin: 7,  hMax: 13, stems: [1, 1], sw: 0.8 }    // 后景 淡绿 矮
+  ];
+  var PLANT_GROUPS = [
+    { x: 14,  level: 2, n: 2 }, { x: 28,  level: 0, n: 3 }, { x: 48,  level: 1, n: 2 },
+    { x: 64,  level: 2, n: 2 }, { x: 82,  level: 0, n: 2 }, { x: 100, level: 1, n: 3 },
+    { x: 120, level: 2, n: 2 }, { x: 138, level: 0, n: 2 }
+  ];
   (function () {
-    var spots = [10, 26, 44, 62, 84, 104, 122, 140];
-    for (var i = 0; i < spots.length; i++) {
-      plants.push({
-        x: spots[i] + (Math.random() * 4 - 2),
-        stems: 1 + (i % 2),                       // 1~2 茎，克制不抢戏
-        h: 12 + Math.floor(Math.random() * 12),   // 12~24 矮，背景化
-        ph: Math.random() * 6.28,
-        col: PLANT_COL[Math.floor(Math.random() * PLANT_COL.length)]
-      });
+    for (var gi = 0; gi < PLANT_GROUPS.length; gi++) {
+      var g = PLANT_GROUPS[gi], lv = PLANT_LVL[g.level];
+      for (var n = 0; n < g.n; n++) {
+        plants.push({
+          x: g.x + n * 4 + (Math.random() * 3 - 1.5),
+          stems: lv.stems[Math.floor(Math.random() * lv.stems.length)],
+          h: lv.hMin + Math.floor(Math.random() * (lv.hMax - lv.hMin + 1)),
+          ph: Math.random() * 6.28,
+          col: lv.col[Math.floor(Math.random() * lv.col.length)],
+          sw: lv.sw
+        });
+      }
+    }
+    // 稀疏单株穿插空隙，打破均匀
+    var spare = [22, 56, 74, 112, 130];
+    for (var si = 0; si < spare.length; si++) {
+      var lv2 = PLANT_LVL[Math.floor(Math.random() * 3)];
+      plants.push({ x: spare[si], stems: 1, h: lv2.hMin + Math.floor(Math.random() * (lv2.hMax - lv2.hMin + 1)), ph: Math.random() * 6.28, col: lv2.col[Math.floor(Math.random() * lv2.col.length)], sw: lv2.sw });
     }
   })();
   var glassDrops = [{ x: 8, y: 15 }, { x: 142, y: 25 }, { x: 5, y: 60 }, { x: 135, y: 70 }, { x: 145, y: 10 }];
@@ -705,29 +726,33 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
 
   // ---- 绘制函数 ----（主角鱼：明确鱼形+丑萌——流线身体+分叉尾鳍+背鳍+尖头，大眼+腮红）
-  function drawPixelFish(ctx, x, y, dir, color, eyeColor, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
+  function drawPixelFish(ctx, x, y, dir, f, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
+    // 多部位配色搭配接口：身=color，尾/鳍/腹=可配(默认同身→纯色主体)，眼=eyeColor，高光=highlight
+    var bodyC = f.color, tailC = f.tail || f.color, finC = f.fin || f.color, bellyC = f.belly || null, eyeC = f.eyeColor, hiC = f.highlight || 'rgba(255,255,255,0.28)';
     ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
-    ctx.fillStyle = color;
-    // 尾柄（细，连接身体）
+    // 尾柄 + 尾鳍（tailC）
+    ctx.fillStyle = tailC;
     ctx.fillRect(-12, -2, 3, 4);
-    // 流线身体（中部宽高，往尾收窄，往头变尖）
+    ctx.fillRect(-15, -5, 4, 3);
+    ctx.fillRect(-15, 2, 4, 3);
+    ctx.fillRect(-13, -2 + Math.round(tailSwing), 3, 4);
+    // 流线身体（bodyC，大面积纯色）
+    ctx.fillStyle = bodyC;
     ctx.fillRect(-10, -3, 5, 6);
     ctx.fillRect(-6, -5, 9, 10);
     ctx.fillRect(-4, -6, 8, 3);   // 背部隆起
     ctx.fillRect(3, -4, 4, 8);    // 头
     ctx.fillRect(7, -3, 3, 6);    // 头尖
     ctx.fillRect(9, -2, 2, 4);    // 最前端（嘴）
-    // 背鳍（顶部小三角）
+    // 腹部搭配色（bellyC，可选，只当主题配了才画）
+    if (bellyC) { ctx.fillStyle = bellyC; ctx.fillRect(-6, 2, 9, 2); ctx.fillRect(4, 1, 3, 2); }
+    // 背鳍/胸鳍/腹鳍（finC）
+    ctx.fillStyle = finC;
     ctx.fillRect(-3, -9, 5, 2); ctx.fillRect(-5, -8, 3, 1);
-    // 尾鳍（分叉扇形，随尾摆）
-    ctx.fillRect(-15, -5, 4, 3);
-    ctx.fillRect(-15, 2, 4, 3);
-    ctx.fillRect(-13, -2 + Math.round(tailSwing), 3, 4);
-    // 胸鳍/腹鳍
     ctx.fillRect(2, 4 + Math.round(pecSwing * 1.2), 3, 2);
     ctx.fillRect(-2, 5, 3, 1);
-    // 高光鳞片（淡银点缀）
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    // 高光鳞片（hiC）
+    ctx.fillStyle = hiC;
     ctx.fillRect(-3, -3, 2, 2); ctx.fillRect(1, -2, 2, 2);
     // 腮红（萌）
     ctx.fillStyle = 'rgba(255,150,160,0.5)';
@@ -735,7 +760,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 眼睛（大眼白+黑瞳+高光，头部近嘴，呆萌追踪光标）
     var ex = 6 + Math.round(eyeOx), ey = -4 + Math.round(eyeOy);
     ctx.fillStyle = '#fff'; ctx.fillRect(ex, ey, 3, 3);
-    ctx.fillStyle = eyeColor; ctx.fillRect(ex + 1, ey + 1, 2, 2);
+    ctx.fillStyle = eyeC; ctx.fillRect(ex + 1, ey + 1, 2, 2);
     ctx.fillStyle = '#fff'; ctx.fillRect(ex + 1, ey, 1, 1);
     // 嘟嘴（头部最前端）
     ctx.fillStyle = '#222';
@@ -775,13 +800,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       if (len < 7) len = 7;
       for (var seg = 0; seg < len; seg += 3) {
         if (py - 3 < waterTop + 3) break;   // 只在水下生长
-        var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * surge; // 微摆，scene.current 时加速
+        var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * (plant.sw || 1) * surge; // 微摆，后景摆幅更小
         ctx.fillStyle = (seg % 4 < 2) ? plant.col : '#143629';
         ctx.fillRect(Math.round(bx + sway), py, 3, 3);
         py -= 2;
       }
       ctx.fillStyle = plant.col;
-      ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * surge) - 1, py, 4, 2); // 顶叶
+      ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * (plant.sw || 1) * surge) - 1, py, 4, 2); // 顶叶
     }
     ctx.globalAlpha = 1;
   }
@@ -1149,7 +1174,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else if (!fish.eaten) {
-      drawPixelFish(aqCtx, fish.x, fish.y, drawDir, drawColor, fish.eyeColor,
+      // 多部位配色：golden 时只覆盖身色，尾/鳍/腹/眼沿用主题配置
+      var fc = { color: drawColor, tail: fish.tail, fin: fish.fin, belly: fish.belly, eyeColor: fish.eyeColor, highlight: fish.highlight };
+      drawPixelFish(aqCtx, fish.x, fish.y, drawDir, fc,
         Math.sin(fish.tail) * 1.5, Math.sin(fish.pecPhase) * 1.5, Math.sin(fish.mouthPhase) > 0.7, fish.eyeOx, fish.eyeOy);
     }
     // 前景 fx（爱心等，画在主角之上）
@@ -1268,11 +1295,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 主题系统解析
     var _themeName = window.__AQUA_THEME__ || 'default';
     activeTheme = AQUA_THEMES[_themeName] || (window.AQUA_THEMES && window.AQUA_THEMES[_themeName]) || AQUA_THEMES['default'];
-    if (activeTheme.fishColor) fish.color = activeTheme.fishColor;
-    if (activeTheme.fishBelly) fish.belly = activeTheme.fishBelly;
-    if (activeTheme.fishFin) fish.fin = activeTheme.fishFin;
-    if (activeTheme.fishStripe) fish.stripe = activeTheme.fishStripe;
-    if (activeTheme.fishEye) fish.eyeColor = activeTheme.fishEye;
+    if (activeTheme.fishColor) fish.color = activeTheme.fishColor; else fish.color = themeColor('--text', '#e6edf3');
+    if (activeTheme.fishFin) fish.fin = activeTheme.fishFin; else fish.fin = null;    // 未配→纯色主体
+    if (activeTheme.fishTail) fish.tail = activeTheme.fishTail; else fish.tail = null;
+    if (activeTheme.fishBelly) fish.belly = activeTheme.fishBelly; else fish.belly = null;
+    if (activeTheme.fishEye) fish.eyeColor = activeTheme.fishEye; else fish.eyeColor = '#000';
+    if (activeTheme.fishHighlight) fish.highlight = activeTheme.fishHighlight; else fish.highlight = null;
     if (activeTheme.deadColor) fish.deadColor = activeTheme.deadColor;
     if (activeTheme.waterRGB) waterRGB = activeTheme.waterRGB;
     else waterRGB = hexToRgb(themeColor('--accent', '#58a6ff')); // 修 bug：主题无水色才回退 accent
