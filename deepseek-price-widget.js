@@ -181,7 +181,10 @@ background:var(--shadow,rgba(0,0,0,.25));font-family:monospace}\
 .aq-x:hover{color:#f85149;background:rgba(248,81,73,.2)}\
 .aq-bar{position:absolute;left:0;right:0;bottom:0;height:26px;display:flex;align-items:center;justify-content:space-between;\
 padding:0 7px;background:var(--card2,rgba(13,17,23,.82));border-top:1px solid var(--border2,#21262d);color:var(--text,#e6edf3);\
-font-size:10px;z-index:4;font-variant-numeric:tabular-nums}\
+font-size:10px;z-index:4;font-variant-numeric:tabular-nums;cursor:pointer;transition:background .2s}\
+.aq-bar:hover{background:var(--shadow,rgba(255,255,255,.08))}\
+.aq-bar .caret{font-size:9px;color:var(--text-tertiary,#6e7681);margin-left:5px;display:inline-block;transition:transform .2s}\
+.aqua.open .aq-bar .caret{transform:rotate(180deg)}\
 .aq-bar .nm{font-weight:700;font-size:11px}\
 .aq-bar .nm.peak{color:var(--warn,#f0883e)}\
 .aq-bar .nm.off{color:var(--accent,#58a6ff)}\
@@ -266,9 +269,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     <canvas id="aqCanvas" width="150" height="92"></canvas>\
     <span class="aq-x" id="aqClose" title="关闭">✕</span>\
     <span class="aq-next" id="aqNext"></span>\
-    <div class="aq-bar">\
+    <div class="aq-bar" id="aqBar">\
       <span class="nm" id="aqName">—</span>\
-      <span class="pr" id="aqPrice"></span>\
+      <span class="pr" id="aqPrice"></span><span class="caret" id="aqCaret">▸</span>\
     </div>\
   </div>\
   <div class="pill" id="pill">\
@@ -305,7 +308,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   document.body.appendChild(host);
   var $ = function (id) { return shadow.getElementById(id); };
   var wrap = $('wrap'), pill = $('pill'), panel = $('panel'), closeBtn = $('closeBtn');
-  var aqua = $('aqua'), aqCanvas = $('aqCanvas'), aqClose = $('aqClose'), aqNext = $('aqNext');
+  var aqua = $('aqua'), aqCanvas = $('aqCanvas'), aqClose = $('aqClose'), aqNext = $('aqNext'), aqBar = $('aqBar');
   var aqName = $('aqName'), aqPrice = $('aqPrice');
   var pillLabel = $('pillLabel'), pillPrice = $('pillPrice'), pillIcon = $('pillIcon');
   var statusEl = $('status'), verEl = $('ver'), tlEl = $('tl'), mottoEl = $('motto'), toastEl = $('toast');
@@ -349,10 +352,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   // 主题系统
   var AQUA_THEMES = {
-    'default': { fishColor: null, deadColor: null, waterRGB: null, decorations: [] },
-    'winter':  { fishColor: '#dce4ec', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
-    'autumn':  { fishColor: '#f0d68a', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
-    'spring':  { fishColor: null, deadColor: null, waterRGB: '180,200,240', decorations: ['petals'] }
+    'default': { fishColor: null, deadColor: null, waterRGB: null, decorations: [], fishBelly: null, fishFin: null, fishStripe: null, fishEye: null },
+    'winter':  { fishColor: '#dce4ec', fishBelly: '#c3d5e3', fishFin: '#a8c4da', fishStripe: '#eef4f9', fishEye: '#3a4a5a', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
+    'autumn':  { fishColor: '#f0d68a', fishBelly: '#e4bc6c', fishFin: '#b8864a', fishStripe: '#c08848', fishEye: '#5a4020', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
+    'spring':  { fishColor: null, deadColor: null, waterRGB: '180,200,240', decorations: ['petals'], fishBelly: null, fishFin: null, fishStripe: null, fishEye: null }
   };
   var activeTheme = AQUA_THEMES['default'];
   var decoParticles = []; // 装饰粒子
@@ -360,9 +363,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   // 鱼状态（含性格+过渡+悬停反应）
   var fish = {
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
-    dead: false, color: '#e6edf3', deadColor: '#6e7681',
+    dead: false, color: '#e6edf3', belly: '#a8b4c0', fin: '#8b949e', stripe: null, eyeColor: '#000', deadColor: '#6e7681',
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
-    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0
+    flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0
   };
   var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255';
   var lastFishPeak = null, aqRaf = null;
@@ -407,7 +410,31 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     });
   })();
 
-  var bubbles = [], burst = [];
+  var bubbles = [], burst = [], food = [];
+
+  // ---- 鱼食系统 ----
+  function addFood(x, y) {
+    var n = 3 + Math.floor(Math.random() * 3);
+    for (var i = 0; i < n; i++) {
+      food.push({
+        x: x + (Math.random() * 10 - 5), y: y + (Math.random() * 6 - 3),
+        r: 1.2 + Math.random() * 0.8, vy: 0.12 + Math.random() * 0.2,
+        age: 0, wobble: Math.random() * 6
+      });
+    }
+  }
+  function findNearestFood() {
+    var best = null, bestDist = 1e9;
+    for (var i = 0; i < food.length; i++) {
+      var fdd = (food[i].x - fish.x) * (food[i].x - fish.x) + (food[i].y - fish.y) * (food[i].y - fish.y);
+      if (fdd < bestDist) { bestDist = fdd; best = food[i]; }
+    }
+    return best;
+  }
+  function removeFood(f) {
+    var idx = food.indexOf(f);
+    if (idx >= 0) food.splice(idx, 1);
+  }
 
   function addRipple(x, y) { ripples.push({ x: x, y: y, r: 1, maxR: 8 + Math.random() * 6, alpha: 0.5 }); }
   function burstBubbles() {
@@ -424,26 +451,42 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
 
   // ---- 绘制函数 ----
-  function drawPixelFish(ctx, x, y, dir, color, tailSwing, pecSwing, mouthOpen) {
+  function drawPixelFish(ctx, x, y, dir, color, belly, fin, stripe, eyeColor, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
     ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
-    ctx.fillStyle = color;
+    // 尾（鳍色，随摆动）
+    ctx.fillStyle = fin;
     ctx.fillRect(-12, -1 + Math.round(tailSwing * 1.8), 3, 3);
     ctx.fillRect(-10, 0 + Math.round(tailSwing * 2.2), 2, 2);
     ctx.fillRect(-11, -2 + Math.round(tailSwing * 1.4), 2, 2);
-    ctx.fillRect(-8, -3, 13, 6); ctx.fillRect(-6, -4, 10, 8);
-    ctx.fillRect(-4, -5, 7, 10); ctx.fillRect(-2, -5, 5, 10);
-    ctx.fillStyle = '#c8d0d8';
-    ctx.fillRect(-6, -2, 2, 2); ctx.fillRect(-2, -3, 2, 2);
-    ctx.fillRect(2, -1, 2, 2); ctx.fillRect(-4, 1, 2, 2); ctx.fillRect(0, 2, 2, 2);
+    // 身体上层（主色）
     ctx.fillStyle = color;
+    ctx.fillRect(-8, -3, 13, 4); ctx.fillRect(-6, -4, 10, 2); ctx.fillRect(-4, -5, 7, 2);
+    // 身体中层过渡
+    ctx.fillStyle = color;
+    ctx.fillRect(-8, 0, 13, 1);
+    // 腹部（belly 色）
+    ctx.fillStyle = belly;
+    ctx.fillRect(-7, 1, 12, 3); ctx.fillRect(-4, -1, 9, 2);
+    // 纹路（如有）
+    if (stripe) {
+      ctx.fillStyle = stripe;
+      ctx.fillRect(-4, -3, 1, 5); ctx.fillRect(0, -3, 1, 5); ctx.fillRect(2, -3, 1, 3);
+      ctx.fillRect(-6, -2, 1, 4);
+    }
+    // 背鳍（鳍色）
+    ctx.fillStyle = fin;
     ctx.fillRect(-1, -7, 4, 2); ctx.fillRect(0, -6, 3, 1);
+    // 胸鳍/腹鳍（鳍色，随摆动）
     ctx.fillRect(2, 3 + Math.round(pecSwing * 1.5), 2, 2);
     ctx.fillRect(1, 4 + Math.round(pecSwing * 1.5), 1, 2);
     ctx.fillRect(-3, 4, 2, 1);
+    // 嘴
     if (mouthOpen) { ctx.fillStyle = '#000'; ctx.fillRect(6, -1, 2, 2); }
-    else { ctx.fillRect(6, 0, 2, 1); }
-    ctx.fillStyle = '#000'; ctx.fillRect(4, -3, 2, 2);
-    ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
+    else { ctx.fillStyle = color; ctx.fillRect(6, 0, 2, 1); }
+    // 眼睛（瞳孔随 eyeOx/eyeOy 追踪光标）
+    var ex = 4 + Math.round(eyeOx), ey = -4 + Math.round(eyeOy);
+    ctx.fillStyle = eyeColor; ctx.fillRect(ex, ey, 2, 2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(ex, ey, 1, 1);
     ctx.restore();
   }
   function drawDeadFish(ctx, x, y, color, flip) {
@@ -505,17 +548,27 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (fish.celebrate > 0) fish.celebrate--;
 
     if (!fish.dead && fish.state !== 'reviving') {
-      // 悬停反应：鱼好奇地朝鼠标靠近
-      if (cursorInTank && (fish.state === 'swim' || fish.state === 'idle')) {
+      // 鱼眼追踪光标（瞳孔偏向光标方向）
+      if (cursorInTank) {
+        fish.eyeOx = Math.max(-1, Math.min(1, (cursorX - fish.x) / 30));
+        fish.eyeOy = Math.max(-1, Math.min(1, (cursorY - fish.y) / 30));
+      } else { fish.eyeOx *= 0.85; fish.eyeOy *= 0.85; }
+
+      // 觅食：有食物且非受惊/挣扎 → 去
+      var foodTarget = (fish.state !== 'dart' && fish.state !== 'hesitate' && fish.state !== 'struggle' && fish.state !== 'dying') ? findNearestFood() : null;
+      if (foodTarget) fish.state = 'seekFood';
+
+      // 悬停反应：鱼好奇地朝鼠标靠近（加强）
+      if (cursorInTank && (fish.state === 'swim' || fish.state === 'idle' || fish.state === 'seekFood')) {
         var cdx = cursorX - fish.x, cdy = cursorY - fish.y;
         var cdist = Math.sqrt(cdx * cdx + cdy * cdy);
-        if (cdist < 60 && cdist > 8) {
-          // 缓慢靠近（好奇）
-          fish.tx += (cursorX - fish.tx) * 0.01;
-          fish.ty += (cursorY - fish.ty) * 0.01;
+        if (cdist < 55 && cdist > 6 && !foodTarget) {
+          // 靠近（好奇），比原来明显
+          fish.tx += (cursorX - fish.tx) * 0.05;
+          fish.ty += (cursorY - fish.ty) * 0.05;
         }
         // 突然移入 → 受惊
-        if (cdist < 15 && fish.state === 'swim' && fish.dartCd <= 0) {
+        if (cdist < 14 && fish.state === 'swim' && fish.dartCd <= 0) {
           fish.state = 'dart'; fish.stateTimer = 0;
           fish.dir = fish.x < AQ_W / 2 ? -1 : 1; // 逃向远离鼠标方向
           fish.dartCd = 60;
@@ -523,7 +576,24 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         }
       }
 
-      if (fish.state === 'swim') {
+      if (fish.state === 'seekFood') {
+        if (foodTarget) {
+          var fdx = foodTarget.x - fish.x, fdy = foodTarget.y - fish.y;
+          var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+          if (fdist > 3) {
+            fish.x += fdx / fdist * fish.speed * 1.4;
+            fish.y += fdy / fdist * fish.speed * 1.4;
+            fish.dir = fdx > 0 ? 1 : -1;
+          } else {
+            removeFood(foodTarget); // 吃掉
+            fish.mouthPhase = 3; fish.pecPhase = 3;
+            spawnMouthBubbles(1);
+            fish.celebrate = Math.max(fish.celebrate, 6);
+            foodTarget = findNearestFood();
+            if (!foodTarget) { fish.state = 'swim'; fish.stateTimer = 0; }
+          }
+        } else { fish.state = 'swim'; fish.stateTimer = 0; }
+      } else if (fish.state === 'swim') {
         if (Math.random() < 0.012 || (Math.abs(fish.x - fish.tx) < 5 && Math.abs(fish.y - fish.ty) < 5)) {
           fish.tx = 14 + Math.random() * (AQ_W - 28);
           var minY = Math.max(waterTop + 8, 14);
@@ -621,6 +691,15 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     for (var bj = burst.length - 1; bj >= 0; bj--) {
       var bb = burst[bj]; bb.y += bb.vy; bb.x += Math.sin(t * 2 + bb.wobble) * 0.2; bb.alpha -= 0.018;
       if (bb.y < 0 || bb.alpha <= 0) burst.splice(bj, 1);
+    }
+
+    // === 2b. 鱼食（下沉 + 消融） ===
+    var foodFloor = AQ_H - 4;
+    for (var fi = food.length - 1; fi >= 0; fi--) {
+      var fd = food[fi];
+      fd.age++; fd.y += fd.vy; fd.x += Math.sin(t * 2 + fd.wobble) * 0.15;
+      if (fd.y > foodFloor) { fd.y = foodFloor; fd.vy = 0; }
+      if (fd.age > 900) food.splice(fi, 1); // ~15秒未吃消融
     }
 
     // === 3. 涟漪 ===
@@ -769,14 +848,21 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     for (var bk = 0; bk < bubbles.length; bk++) drawBubble(aqCtx, bubbles[bk].x, bubbles[bk].y, bubbles[bk].r, Math.max(0, bubbles[bk].alpha));
     for (var bl = 0; bl < burst.length; bl++) drawBubble(aqCtx, burst[bl].x, burst[bl].y, burst[bl].r, Math.max(0, burst[bl].alpha));
 
+    // 鱼食
+    for (var fo = 0; fo < food.length; fo++) {
+      var fdp = food[fo];
+      aqCtx.fillStyle = 'rgba(230,150,80,0.85)';
+      aqCtx.fillRect(Math.round(fdp.x), Math.round(fdp.y), 2, 2);
+    }
+
     // 鱼
     if (fish.dead || fish.state === 'dying') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8, fish.deadColor, fish.flipProgress);
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else {
-      drawPixelFish(aqCtx, fish.x, fish.y, fish.dir, fish.color,
-        Math.sin(fish.tail) * 1.5, Math.sin(fish.pecPhase) * 1.5, Math.sin(fish.mouthPhase) > 0.7);
+      drawPixelFish(aqCtx, fish.x, fish.y, fish.dir, fish.color, fish.belly, fish.fin, fish.stripe, fish.eyeColor,
+        Math.sin(fish.tail) * 1.5, Math.sin(fish.pecPhase) * 1.5, Math.sin(fish.mouthPhase) > 0.7, fish.eyeOx, fish.eyeOy);
     }
 
     // 玻璃效果
@@ -873,16 +959,22 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       : pad2(mm) + ':' + pad2(ss) + ' 后转' + toName;
     // 主题色（跟随主站 CSS 变量，不用硬编码）
     fish.color = themeColor('--text', '#e6edf3');
+    fish.belly = themeColor('--text-secondary', '#8b949e');
+    fish.fin = themeColor('--text-tertiary', '#6e7681');
+    fish.eyeColor = '#000';
     fish.deadColor = themeColor('--text-tertiary', '#6e7681');
 
     // 主题系统解析
     var _themeName = window.__AQUA_THEME__ || 'default';
     activeTheme = AQUA_THEMES[_themeName] || (window.AQUA_THEMES && window.AQUA_THEMES[_themeName]) || AQUA_THEMES['default'];
     if (activeTheme.fishColor) fish.color = activeTheme.fishColor;
+    if (activeTheme.fishBelly) fish.belly = activeTheme.fishBelly;
+    if (activeTheme.fishFin) fish.fin = activeTheme.fishFin;
+    if (activeTheme.fishStripe) fish.stripe = activeTheme.fishStripe;
+    if (activeTheme.fishEye) fish.eyeColor = activeTheme.fishEye;
     if (activeTheme.deadColor) fish.deadColor = activeTheme.deadColor;
     if (activeTheme.waterRGB) waterRGB = activeTheme.waterRGB;
-
-    waterRGB = hexToRgb(themeColor('--accent', '#58a6ff'));
+    else waterRGB = hexToRgb(themeColor('--accent', '#58a6ff')); // 修 bug：主题无水色才回退 accent
     // 水位 = 当前谷时段剩余比例（谷开始满水，谷结束水干）；峰=0 水干
     waterTarget = peak ? 0 : waterLevelFor(p);
     // 鱼状态：谷=活鱼游动，峰=水干鱼死（翻白肚沉底）；切换瞬间冒泡爆发
@@ -1034,6 +1126,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   function togglePanel() {
     open = !open;
     panel.classList.toggle('open', open);
+    aqua.classList.toggle('open', open);
     if (open) {
       positionPanel();
       buildTimeline(); render();
@@ -1044,11 +1137,30 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (wrap.getAttribute('data-dragged') === '1' || wasDragged) return;
     togglePanel();
   });
-  // 鱼缸点击展开/收起（✕ 除外）
+  // 鱼缸交互：数据条开面板；点鱼身受惊；点水体投喂
   aqua.addEventListener('click', function (e) {
     if (e.target === aqClose || aqClose.contains(e.target)) return;
     if (wrap.getAttribute('data-dragged') === '1' || wasDragged) return;
-    togglePanel();
+    // 点数据条 → 展开/收起面板
+    if (e.target === aqBar || aqBar.contains(e.target)) { togglePanel(); return; }
+    // 映射点击坐标到画布坐标系
+    var rect = aqCanvas.getBoundingClientRect();
+    if (rect.width === 0) return;
+    var cx = (e.clientX - rect.left) * (AQ_W / rect.width);
+    var cy = (e.clientY - rect.top) * (AQ_H / rect.height);
+    var fdx = cx - fish.x, fdy = cy - fish.y;
+    var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+    if (fdist < 12 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving') {
+      // 点鱼身 → 敲缸受惊（急逃）
+      fish.state = 'dart'; fish.stateTimer = 0;
+      fish.dir = cx > AQ_W / 2 ? -1 : 1;
+      fish.dartCd = 70;
+      addRipple(cx, cy);
+    } else {
+      // 点水体 → 投喂
+      addFood(cx, cy);
+      addRipple(cx, cy);
+    }
   });
   // 关闭浮窗：sessionStorage 优先（重开浏览器=新会话=恢复显示），
   // sessionStorage 不可用时 localStorage 时间戳兜底（6小时内不复活）
