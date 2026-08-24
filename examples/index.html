@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aqua DeepSeek — 像素鱼缸价格浮窗</title>
+  <style>
+    body {
+      margin: 0; padding: 40px;
+      background: #0d1117; color: #e6edf3;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    h1 { font-size: 20px; color: #8b949e; }
+    p { color: #8b949e; font-size: 14px; line-height: 1.8; max-width: 520px; }
+    .tag { color: #58a6ff; }
+  </style>
+  <!-- 一行引入，零后端依赖，开箱即用 -->
+  <script src="../deepseek-price-widget.js"></script>
+</head>
+<body>
+  <h1>🐟 Aqua DeepSeek — 像素鱼缸价格浮窗</h1>
+  <p>
+    右下角的小鱼缸就是它。一条像素鱼在蓝色水里自由游动——<br>
+    <span class="tag">谷哥时段</span>（空闲/半价）：水满鱼欢快，水位随谷时段剩余时间逐渐下降。<br>
+    <span class="tag">峰哥时段</span>（高峰）：水干鱼翻白肚，等谷哥回来水又涨满鱼复活。<br>
+    点击鱼缸展开详细价格面板；拖动到任意位置，面板自动跟随且不重叠。
+  </p>
+  <p>
+    想让价格自动跟官网同步？运行
+    <code>scripts/fetch_pricing.py</code>
+    抓取 DeepSeek 官网最新价格，配合一个简单的后端服务即可。
+    没有后端也能用——内置默认价格会兜底。
+  </p>
+  <p style="margin-top: 32px; color: #6e7681; font-size: 12px;">
+    灵感来自 <a href="https://github.com/Gayaya999/silicon-fish-clock" style="color:#58a6ff;">silicon-fish-clock</a>
+    — 一款住在透明像素鱼缸里的桌面任务计时器。
+  </p>
+</body>
+</html>
