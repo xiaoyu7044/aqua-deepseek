@@ -163,13 +163,13 @@
 
   shadow.innerHTML = '\
 <style>\
-:host{all:initial}\
+:host{position:fixed;right:14px;bottom:14px;z-index:999999;font-size:12px;line-height:1.5;color:var(--text,#e6edf3)}\
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}\
 .wrap{position:fixed;right:14px;bottom:14px;z-index:999999;user-select:none;cursor:grab}\
 .wrap.dragging{cursor:grabbing}\
 /* ===== 桌面鱼缸 (陪伴式) ===== */\
 .aqua{position:relative;width:150px;height:118px;border-radius:12px;overflow:hidden;\
-border:1px solid var(--border,#30363d);background:linear-gradient(180deg,var(--card,#161b22),rgba(13,17,23,.88));\
+border:1px solid var(--border,#30363d);background:linear-gradient(180deg,var(--card,#161b22),var(--card2,rgba(13,17,23,.88)));\
 box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer;\
 transition:border-color .3s,box-shadow .3s}\
 .aqua.peak{border-color:var(--warn,#f0883e);box-shadow:0 6px 18px rgba(240,136,62,.22)}\
@@ -177,20 +177,20 @@ transition:border-color .3s,box-shadow .3s}\
 .aqua canvas{display:block;width:150px;height:92px;pointer-events:none}\
 .aq-x{position:absolute;top:3px;right:3px;width:18px;height:18px;line-height:16px;text-align:center;\
 font-size:11px;color:var(--text-tertiary,#6e7681);border-radius:4px;cursor:pointer;z-index:5;\
-background:rgba(0,0,0,.25);font-family:monospace}\
+background:var(--shadow,rgba(0,0,0,.25));font-family:monospace}\
 .aq-x:hover{color:#f85149;background:rgba(248,81,73,.2)}\
 .aq-bar{position:absolute;left:0;right:0;bottom:0;height:26px;display:flex;align-items:center;justify-content:space-between;\
-padding:0 7px;background:rgba(13,17,23,.82);border-top:1px solid var(--border2,#21262d);color:var(--text,#e6edf3);\
+padding:0 7px;background:var(--card2,rgba(13,17,23,.82));border-top:1px solid var(--border2,#21262d);color:var(--text,#e6edf3);\
 font-size:10px;z-index:4;font-variant-numeric:tabular-nums}\
 .aq-bar .nm{font-weight:700;font-size:11px}\
 .aq-bar .nm.peak{color:var(--warn,#f0883e)}\
 .aq-bar .nm.off{color:var(--accent,#58a6ff)}\
 .aq-bar .pr{color:var(--text2,#8b949e);white-space:nowrap}\
 .aq-next{position:absolute;top:3px;left:5px;font-size:9px;color:var(--text-tertiary,#8b949e);z-index:5;\
-background:rgba(0,0,0,.22);padding:1px 4px;border-radius:3px;font-variant-numeric:tabular-nums}\
+background:var(--shadow,rgba(0,0,0,.22));padding:1px 4px;border-radius:3px;font-variant-numeric:tabular-nums}\
 /* ===== 移动胶囊 (回退) ===== */\
 .pill{display:none;align-items:center;gap:6px;background:var(--card,#161b22);border:1px solid var(--border,#30363d);border-radius:999px;\
-padding:7px 13px;color:var(--text,#e6edf3);font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.25);\
+padding:7px 13px;color:var(--text,#e6edf3);font-size:12px;box-shadow:0 4px 14px var(--shadow,rgba(0,0,0,.25));\
 transition:border-color .3s,box-shadow .3s}\
 .pill.peak{border-color:var(--warn,#f0883e);box-shadow:0 4px 14px rgba(240,136,62,.18)}\
 .pill.off{border-color:var(--accent2,#3fb950);box-shadow:0 4px 14px rgba(63,185,80,.14)}\
@@ -877,7 +877,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
     // 主题系统解析
     var _themeName = window.__AQUA_THEME__ || 'default';
-    activeTheme = AQUA_THEMES[_themeName] || AQUA_THEMES['default'];
+    activeTheme = AQUA_THEMES[_themeName] || (window.AQUA_THEMES && window.AQUA_THEMES[_themeName]) || AQUA_THEMES['default'];
     if (activeTheme.fishColor) fish.color = activeTheme.fishColor;
     if (activeTheme.deadColor) fish.deadColor = activeTheme.deadColor;
     if (activeTheme.waterRGB) waterRGB = activeTheme.waterRGB;

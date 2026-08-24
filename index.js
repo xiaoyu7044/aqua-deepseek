@@ -1,0 +1,155 @@
+// @ts-nocheck
+/**
+ * aqua-deepseek — HD 插件：像素鱼缸 DeepSeek 价格浮窗
+ * 1. 注册 aqua_price 工具（查价格/获取嵌入码/设主题）
+ * 2. 在 HD 页面注入鱼缸浮窗（webServer 路由 + index-inject）
+ */
+import { defineTool } from '@deepseek-ai/dsh-tools';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import https from 'node:https';
+export const name = 'aqua-deepseek';
+export const inject = ['tools', 'webServer'];
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const PRICING_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/';
+function fetch(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, { headers: { 'User-Agent': UA } }, (res) => {
+            let data = '';
+            res.on('data', (c) => data += c);
+            res.on('end', () => resolve(data));
+        }).on('error', reject);
+    });
+}
+function parsePricing(html) {
+    const rows = html.split('<tr');
+    const priceRows = [];
+    for (const row of rows) {
+        if (row.includes('空闲时段') || row.includes('高峰时段')) {
+            const values = [...row.matchAll(/([\d.]+)元/g)].map(m => parseFloat(m[1]));
+            if (values.length === 3)
+                priceRows.push(values);
+        }
+    }
+    if (priceRows.length !== 6)
+        return null;
+    const segMatch = html.match(/高峰时段为北京时间\s*(\d{1,2})(?::\d{2})?\s*-\s*(\d{1,2})(?::\d{2})?\s*[、,，]\s*(\d{1,2})(?::\d{2})?\s*-\s*(\d{1,2})(?::\d{2})?/);
+    const segments = segMatch ? [[+segMatch[1], +segMatch[2]], [+segMatch[3], +segMatch[4]]] : [[9, 12], [14, 18]];
+    const models = {};
+    const keys = ['flash', 'pro', 'vision'];
+    const names = { flash: 'DeepSeek-V4-Flash', pro: 'DeepSeek-V4-Pro', vision: 'DeepSeek-V4-Flash-Vision-Exp' };
+    const rowOrder = [['cacheHit', 'off'], ['cacheHit', 'peak'], ['cacheMiss', 'off'], ['cacheMiss', 'peak'], ['output', 'off'], ['output', 'peak']];
+    for (let i = 0; i < keys.length; i++) {
+        const m = {};
+        for (let j = 0; j < rowOrder.length; j++) {
+            const [cat, sub] = rowOrder[j];
+            if (!m[cat])
+                m[cat] = {};
+            m[cat][sub] = priceRows[j][i];
+        }
+        models[keys[i]] = { name: names[keys[i]], ...m };
+    }
+    return { models, segments, weekendOff: html.includes('周末') };
+}
+export function apply(ctx) {
+    // ---- 1. 注入鱼缸浮窗到 HD 页面 ----
+    let widgetCode = '';
+    try {
+        widgetCode = readFileSync(join(import.meta.dirname || __dirname, 'deepseek-price-widget.js'), 'utf-8');
+    }
+    catch (e) {
+        console.error('[aqua-deepseek] 读取 widget JS 失败:', e);
+    }
+    if (widgetCode) {
+        // 注册路由：提供 widget JS 文件
+        const widgetPath = '/plugins/aqua-deepseek/widget.js';
+        ctx.webServer.register({
+            kind: 'exact',
+            path: widgetPath,
+            handler: (_req, res) => {
+                res.writeHead(200, {
+                    'Content-Type': 'application/javascript; charset=utf-8',
+                    'Cache-Control': 'public, max-age=3600',
+                });
+                res.end(widgetCode);
+            },
+        });
+        // 注入：HD 配套主题 CSS + JS + 浮窗脚本
+        ctx.on('webserver/index-inject', (table) => {
+            // HD 主题 CSS 变量覆盖（白底深色文字蓝色强调）
+            table.push({
+                kind: 'style',
+                text: `#ds-price-widget-host{--card:#f9fafb;--card2:#f5f6f7;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);--text:#0f1115;--text-secondary:#61666b;--text-tertiary:#81858c;--accent:rgb(65,118,230);--accent2:rgb(50,100,200);--warn:rgb(230,130,50);--green:rgb(50,180,80);--shadow:0 2px 8px rgba(0,0,0,.08);}`,
+            });
+            // HD 专属鱼缸主题（深色鱼 + 蓝水）
+            table.push({
+                kind: 'script',
+                placement: 'head',
+                text: `window.__AQUA_THEME__='hd';window.AQUA_THEMES=window.AQUA_THEMES||{};window.AQUA_THEMES.hd={fishColor:'#1a1d21',deadColor:'#81858c',waterRGB:'65,118,230',decorations:[]};`,
+            });
+            // 加载浮窗
+            table.push({
+                kind: 'script-src',
+                placement: 'body',
+                src: widgetPath,
+            });
+        });
+    }
+    // ---- 2. 注册 aqua_price 工具 ----
+    ctx.tools.register(defineTool({
+        name: 'aqua_price',
+        description: '查询 DeepSeek API 实时价格（峰谷时段、各模型价格）。可选返回浮窗 JS 源码或设置主题。',
+        parameters: {
+            action: {
+                type: 'string',
+                description: 'pricing=查价格（默认）, widget=返回浮窗JS源码, theme=设置主题(default/winter/autumn/spring)',
+            },
+            theme: {
+                type: 'string',
+                description: '主题名（action=theme 时必填）: default/winter/autumn/spring',
+            }
+        },
+        output: {
+            schema: { type: 'string' },
+            render: (_args, value) => [{ type: 'text', text: String(value) }],
+        },
+        async execute({ action, theme }) {
+            const act = action || 'pricing';
+            if (act === 'widget') {
+                try {
+                    return `🐟 Aqua DeepSeek 浮窗 JS（${Math.round(widgetCode.length / 1024)}KB）已注入 HD 页面。\n\n主题设置：window.__AQUA_THEME__ = 'winter'（可选 default/winter/autumn/spring）`;
+                }
+                catch (e) {
+                    return `❌ 读取 widget 文件失败: ${e.message}`;
+                }
+            }
+            if (act === 'theme') {
+                const valid = ['default', 'winter', 'autumn', 'spring'];
+                if (!theme || !valid.includes(theme))
+                    return `❌ 无效主题。可选: ${valid.join(', ')}`;
+                return `🎨 主题 "${theme}" 设置方式：\n在浏览器控制台执行：window.__AQUA_THEME__ = '${theme}'; location.reload();`;
+            }
+            try {
+                const html = await fetch(PRICING_URL);
+                const data = parsePricing(html);
+                if (!data)
+                    return '❌ 官网价格解析失败';
+                const lines = ['🐟 DeepSeek API 实时价格（官网）\n'];
+                lines.push(`高峰时段: ${data.segments.map((s) => s[0] + ':00-' + s[1] + ':00').join(', ')}`);
+                lines.push(`周末全天半价: ${data.weekendOff ? '是' : '否'}\n`);
+                for (const [key, model] of Object.entries(data.models)) {
+                    lines.push(`【${model.name}】`);
+                    lines.push(`  输入·缓存命中:  空闲 ¥${model.cacheHit.off}  高峰 ¥${model.cacheHit.peak}`);
+                    lines.push(`  输入·缓存未命中: 空闲 ¥${model.cacheMiss.off}  高峰 ¥${model.cacheMiss.peak}`);
+                    lines.push(`  输出:          空闲 ¥${model.output.off}  高峰 ¥${model.output.peak}`);
+                    lines.push('');
+                }
+                lines.push('（空闲价格 = 高峰一半，周末全天按空闲价）');
+                return lines.join('\n');
+            }
+            catch (e) {
+                return `❌ 抓取失败: ${e.message}`;
+            }
+        }
+    }));
+}
