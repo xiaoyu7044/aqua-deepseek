@@ -181,14 +181,14 @@ background:var(--shadow,rgba(0,0,0,.25));font-family:monospace}\
 .aq-x:hover{color:#f85149;background:rgba(248,81,73,.2)}\
 .aq-bar{position:absolute;left:0;right:0;bottom:0;height:26px;display:flex;align-items:center;justify-content:space-between;\
 padding:0 7px;background:var(--card2,rgba(13,17,23,.82));border-top:1px solid var(--border2,#21262d);color:var(--text,#e6edf3);\
-font-size:10px;z-index:4;font-variant-numeric:tabular-nums;cursor:pointer;transition:background .2s}\
+font-size:9px;z-index:4;font-variant-numeric:tabular-nums;cursor:pointer;transition:background .2s}\
 .aq-bar:hover{background:var(--shadow,rgba(255,255,255,.08))}\
 .aq-bar .caret{font-size:9px;color:var(--text-tertiary,#6e7681);margin-left:5px;display:inline-block;transition:transform .2s}\
 .aqua.open .aq-bar .caret{transform:rotate(180deg)}\
-.aq-bar .nm{font-weight:700;font-size:11px}\
+.aq-bar .nm{font-weight:700;font-size:9px;white-space:nowrap;flex-shrink:0}\
 .aq-bar .nm.peak{color:var(--warn,#f0883e)}\
 .aq-bar .nm.off{color:var(--accent,#58a6ff)}\
-.aq-bar .pr{color:var(--text2,#8b949e);white-space:nowrap}\
+.aq-bar .pr{color:var(--text2,#8b949e);white-space:nowrap;flex-shrink:0;overflow:hidden;text-overflow:ellipsis}\
 .aq-next{position:absolute;top:3px;left:5px;font-size:9px;color:var(--text-tertiary,#8b949e);z-index:5;\
 background:var(--shadow,rgba(0,0,0,.22));padding:1px 4px;border-radius:3px;font-variant-numeric:tabular-nums}\
 /* ===== 移动胶囊 (回退) ===== */\
@@ -527,35 +527,39 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (scene.dust > 0) scene.dust--;
   }
 
+  // 手动/自动共用的彩蛋触发器：随机抽一个彩蛋执行
+  function triggerEgg() {
+    var r = Math.random();
+    if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
+    else if (r < 0.14 && !fish.dead && extraFish.length === 0) spawnCompanions(); // 2 同伴鱼
+    else if (r < 0.20 && !fish.dead && !jumping) startJump();    // 3 跳跃
+    else if (r < 0.26 && !fish.dead) spawnHeart();               // 4 冒爱心
+    else if (r < 0.32 && !fish.dead) spawnRainbow();             // 5 彩虹泡泡
+    else if (r < 0.38) spawnJelly();                             // 6 水母
+    else if (r < 0.44) spawnCrab();                              // 7 螃蟹
+    else if (r < 0.50) spawnStarfish();                          // 8 海星
+    else if (r < 0.56) spawnTurtle();                            // 9 海龟
+    else if (r < 0.62) spawnShadow();                            // 10 鲨鱼剪影
+    else if (r < 0.68) spawnSquid();                             // 11 乌贼
+    else if (r < 0.74) spawnBubRain();                           // 12 泡泡雨
+    else if (r < 0.78 && !fish.dead) fishFx.golden = 150;        // 13 变金闪光
+    else if (r < 0.82 && !fish.dead) { fishFx.spin = 60; addRipple(fish.x, fish.y); } // 14 转圈
+    else if (r < 0.86) scene.light = 220;                        // 15 光线增强
+    else if (r < 0.90) scene.current = 220;                      // 16 洋流水草加速
+    else if (r < 0.94) scene.drip = 240;                         // 17 玻璃水珠滑落
+    else if (r < 0.98) scene.dust = 200;                         // 18 尘埃风暴
+    else if (!fish.dead) spawnHeart();                           // 兜底
+  }
+
   function updateEggs(t, waterTop) {
-    // 触发：约25s后活跃，开越久频率越高（v3.3.1 频率翻倍）
+    // 触发：约12s后活跃，开越久频率越高（v3.3.2 启动砍半+概率调大；点鱼缸5次可手动触发）
     eggFrame++;
     if (eggCooldown > 0) eggCooldown--;
-    if (eggFrame > 1500 && eggCooldown <= 0 && !predator) {
-      var p = 0.0015 + Math.min(0.006, (eggFrame - 1500) / 45000);
+    if (eggFrame > 750 && eggCooldown <= 0 && !predator) {
+      var p = 0.0025 + Math.min(0.011, (eggFrame - 750) / 30000);
       if (Math.random() < p) {
-        eggCooldown = 650 + Math.floor(Math.random() * 1200); // ~11~31s 冷却（频率翻倍）
-        var r = Math.random();
-        // --- 20+ 彩蛋随机库 ---
-        if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
-        else if (r < 0.14 && !fish.dead && extraFish.length === 0) spawnCompanions(); // 2 同伴鱼
-        else if (r < 0.20 && !fish.dead && !jumping) startJump();    // 3 跳跃
-        else if (r < 0.26 && !fish.dead) spawnHeart();               // 4 冒爱心
-        else if (r < 0.32 && !fish.dead) spawnRainbow();             // 5 彩虹泡泡
-        else if (r < 0.38) spawnJelly();                             // 6 水母
-        else if (r < 0.44) spawnCrab();                              // 7 螃蟹
-        else if (r < 0.50) spawnStarfish();                          // 8 海星
-        else if (r < 0.56) spawnTurtle();                            // 9 海龟
-        else if (r < 0.62) spawnShadow();                            // 10 鲨鱼剪影
-        else if (r < 0.68) spawnSquid();                             // 11 乌贼
-        else if (r < 0.74) spawnBubRain();                           // 12 泡泡雨
-        else if (r < 0.78 && !fish.dead) fishFx.golden = 150;        // 13 变金闪光
-        else if (r < 0.82 && !fish.dead) { fishFx.spin = 60; addRipple(fish.x, fish.y); } // 14 转圈
-        else if (r < 0.86) scene.light = 220;                        // 15 光线增强
-        else if (r < 0.90) scene.current = 220;                      // 16 洋流水草加速
-        else if (r < 0.94) scene.drip = 240;                         // 17 玻璃水珠滑落
-        else if (r < 0.98) scene.dust = 200;                         // 18 尘埃风暴
-        else if (!fish.dead) spawnHeart();                           // 兜底
+        eggCooldown = 450 + Math.floor(Math.random() * 900); // ~7~22s 冷却（再缩短）
+        triggerEgg();
       }
     }
     // 捕食者
@@ -1434,6 +1438,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (wrap.getAttribute('data-dragged') === '1' || wasDragged) return;
     togglePanel();
   });
+  // 点鱼缸5次 → 手动触发一次彩蛋（连击计数）
+  var tapCount = 0, tapLastT = 0;
   // 鱼缸交互：数据条开面板；点鱼身受惊；点水体投喂
   aqua.addEventListener('click', function (e) {
     if (e.target === aqClose || aqClose.contains(e.target)) return;
@@ -1445,6 +1451,16 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (rect.width === 0) return;
     var cx = (e.clientX - rect.left) * (AQ_W / rect.width);
     var cy = (e.clientY - rect.top) * (AQ_H / rect.height);
+    // 点鱼缸5次（2秒内）→ 手动触发一次彩蛋
+    var now = Date.now();
+    if (now - tapLastT > 2000) tapCount = 0;
+    tapLastT = now; tapCount++;
+    if (tapCount >= 5) {
+      tapCount = 0;
+      triggerEgg();
+      burstBubbles(); addRipple(fish.x, fish.y);
+      addFood(cx, cy);
+    }
     var fdx = cx - fish.x, fdy = cy - fish.y;
     var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
     if (fdist < 12 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving') {
