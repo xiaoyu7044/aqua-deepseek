@@ -134,26 +134,36 @@
     if (isNaN(n)) return '110,118,129';
     return (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
   }
-  // 当前谷时段剩余比例 [0,1]：谷开始=1(水满)，谷结束=0(水干)；峰时段=0
-  // 谷时段 = 一天中不在 PEAK_SEGMENTS 的区间；周末(WEEKEND_OFF)全天为谷
+  // 水位 = 距下一个峰起点的时间比例 [0,1]。低谷从上一个峰结束(满水)连续降到下一个峰开始(水干)。
+  // 峰值段仅工作日(9-12/14-18)；周末(WEEKEND_OFF)全天谷→无峰，低谷跨周末连续延伸到下周一峰起点。
+  // 这样谷价时段水都在，只有接近切峰(进入峰段)才逐渐干——修复"谷段中途就缺水"的 bug。
   function waterLevelFor(p) {
-    if (WEEKEND_OFF && (p.dow === 0 || p.dow === 6)) {
-      var t1 = p.h * 60 + p.m + p.s / 60;
-      return Math.max(0, Math.min(1, (1440 - t1) / 1440));
-    }
-    var t = p.h * 60 + p.m + p.s / 60;
-    var bounds = [0, 24 * 60];
-    PEAK_SEGMENTS.forEach(function (seg) { bounds.push(seg[0] * 60, seg[1] * 60); });
-    bounds.sort(function (a, b) { return a - b; });
-    // 谷段 = 相邻边界中的偶数区间 [bounds[i], bounds[i+1]] (i 偶数)
-    for (var i = 0; i + 1 < bounds.length; i += 2) {
-      var s = bounds[i], e = bounds[i + 1];
-      if (t >= s && t < e) {
-        var total = Math.max(1, e - s);
-        return Math.max(0, Math.min(1, (e - t) / total));
+    var dow = p.dow, frac = p.h * 60 + p.m + p.s / 60;
+    var weekMin = dow * 1440 + frac;               // 周内绝对分钟
+    var segs = PEAK_SEGMENTS.slice().sort(function (a, b) { return a[0] - b[0]; });
+    var starts = [], ends = [];
+    // 展开 ±14 天的工作日峰段边界（周末无峰，低谷自动跨周末）
+    for (var d = -14; d <= 14; d++) {
+      var dd = ((dow + d) % 7 + 7) % 7;
+      if (WEEKEND_OFF && (dd === 0 || dd === 6)) continue;
+      var base = (dow + d) * 1440;
+      for (var i = 0; i < segs.length; i++) {
+        starts.push(base + segs[i][0] * 60);
+        ends.push(base + segs[i][1] * 60);
       }
     }
-    return 0;
+    starts.sort(function (a, b) { return a - b; });
+    ends.sort(function (a, b) { return a - b; });
+    var nextStart = null, prevEnd = null;
+    for (var s = 0; s < starts.length; s++) { if (starts[s] > weekMin) { nextStart = starts[s]; break; } }
+    for (var e2 = ends.length - 1; e2 >= 0; e2--) { if (ends[e2] <= weekMin) { prevEnd = ends[e2]; break; } }
+    if (nextStart === null || prevEnd === null) return 0.5;   // 兜底
+    // 谷=有水：水位从满水(1)随"距下一峰越近"渐变降到下限(0.35)，谷时段始终有水下限（用户要求"谷就是有水状态的"）。
+    // 周末无峰→低谷跨周末(周五18点→周一9点)，同样适用：周末全天谷价水充足。
+    // 只有真正切换峰段(peak=true)时调用处才把 waterTarget 置 0 → 水干 → 鱼旱死 → 沙漠背景。
+    var gap = Math.max(1, nextStart - prevEnd);
+    var ratio = Math.max(0, Math.min(1, (nextStart - weekMin) / gap));
+    return 0.35 + 0.65 * ratio;
   }
 
   // ---- 构造 UI ----
