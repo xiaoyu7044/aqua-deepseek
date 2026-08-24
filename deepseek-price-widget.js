@@ -528,13 +528,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
 
   function updateEggs(t, waterTop) {
-    // 触发：约50s后活跃，开越久频率越高
+    // 触发：约25s后活跃，开越久频率越高（v3.3.1 频率翻倍）
     eggFrame++;
     if (eggCooldown > 0) eggCooldown--;
-    if (eggFrame > 3000 && eggCooldown <= 0 && !predator) {
-      var p = 0.0008 + Math.min(0.005, (eggFrame - 3000) / 90000);
+    if (eggFrame > 1500 && eggCooldown <= 0 && !predator) {
+      var p = 0.0015 + Math.min(0.006, (eggFrame - 1500) / 45000);
       if (Math.random() < p) {
-        eggCooldown = 1300 + Math.floor(Math.random() * 2400); // ~22~62s 冷却
+        eggCooldown = 650 + Math.floor(Math.random() * 1200); // ~11~31s 冷却（频率翻倍）
         var r = Math.random();
         // --- 20+ 彩蛋随机库 ---
         if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
