@@ -428,8 +428,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   // ---- 彩蛋：特效实体（fx）+ 场景标志 ----
   var fx = [];
-  var scene = { light: 0, current: 0, drip: 0, dust: 0 };
+  var scene = { light: 0, current: 0, drip: 0, dust: 0, wind: 0, scorch: 0 };
   var fishFx = { golden: 0, spin: 0 };
+  // 峰→谷过场天气（乌云+闪电+雨，无声音）+ 过食翻肚触发
+  var weather = 0, weatherT = 0, lightningFlash = 0, rainDrops = [], feedTimes = [];
 
   function spawnFx(type, opts) {
     var f = { type: type, age: 0, life: 600, x: 0, y: 0, vx: 0, vy: 0, dir: 1 };
@@ -538,6 +540,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   // 手动/自动共用的彩蛋触发器：随机抽一个彩蛋执行
   function triggerEgg() {
     if (aridF > 0.5) { triggerAridEgg(); return; }   // 干旱主题（高峰没水）用干旱彩蛋库
+    if (AQ_H * waterNow < 15) return;                 // 水少于15px：不触发水族彩蛋（彩蛋只在水里出现）
+    if (fish.state === 'float') return;               // 过食翻肚期间暂停彩蛋（不受惊吓/吞鱼）
     var r = Math.random();
     if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
     else if (r < 0.14 && !fish.dead && extraFish.length === 0) spawnCompanions(); // 2 同伴鱼
@@ -836,6 +840,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   // ---- 鱼食系统 ----
   function addFood(x, y) {
+    feedTimes.push(Date.now());
     var n = 3 + Math.floor(Math.random() * 3);
     for (var i = 0; i < n; i++) {
       food.push({
@@ -940,6 +945,44 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
+  // 峰→谷过场：乌云 + 闪电（无声音）+ 下雨填满
+  function drawWeather(ctx, t, waterTop) {
+    if (weather === 0) return;
+    var a = Math.min(1, weatherT / 20);
+    // 乌云（右上一片灰云层）
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(60,68,82,1)';
+    var cloudBase = 9;
+    for (var ci = 0; ci < 4; ci++) {
+      var cx = 22 + ci * 34 + Math.sin(t * 0.4 + ci * 1.3) * 2;
+      ctx.beginPath(); ctx.arc(cx, cloudBase, 8 + (ci % 2), 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 7, cloudBase + 3, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - 7, cloudBase + 3, 6, 0, Math.PI * 2); ctx.fill();
+    }
+    // 闪电（间歇，无声音）
+    if (weather >= 2 && lightningFlash > 0) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.4 * lightningFlash / 6) + ')';
+      ctx.fillRect(0, 0, AQ_W, AQ_H);
+      ctx.strokeStyle = 'rgba(255,244,190,' + (0.9 * lightningFlash / 6) + ')'; ctx.lineWidth = 1.5;
+      var lx = 40 + Math.random() * (AQ_W - 80), ly = 12;
+      ctx.beginPath(); ctx.moveTo(lx, ly);
+      var lsegs = 4;
+      for (var ls = 0; ls < lsegs; ls++) { lx += (Math.random() - 0.5) * 16; ly += 9; ctx.lineTo(lx, ly); }
+      ctx.stroke();
+    }
+    // 雨（下落，打水面）
+    if (weather >= 2) {
+      ctx.strokeStyle = 'rgba(190,215,245,0.6)'; ctx.lineWidth = 1;
+      for (var rd = 0; rd < rainDrops.length; rd++) {
+        var rp = rainDrops[rd]; rp.y += rp.vy;
+        if (rp.y > waterTop) { rp.y = 10; rp.x = Math.random() * AQ_W; }
+        ctx.beginPath(); ctx.moveTo(rp.x, rp.y); ctx.lineTo(rp.x - 0.6, rp.y + 4); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
   // 颜色插值（hexA→hexB，f: 0..1）用于干旱水草枯黄过渡
   function mixHex(a, b, f) {
     if (!a || a.charAt(0) !== '#') return a;
@@ -1000,6 +1043,17 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     fish.dartCd = Math.max(0, fish.dartCd - 1);
     if (fish.celebrate > 0) fish.celebrate--;
 
+    // === 谷→峰过场：鱼随水干逐渐旱死（水位驱动，非瞬间翻肚）===
+    if (!fish.dead && !fish.eaten && fish.state !== 'float') {
+      if (waterNow < 0.08) {
+        // 水干透→走 dying 动画（翻白肚下沉）→90帧后 dead
+        if (fish.state !== 'dying') { fish.state = 'dying'; fish.stateTimer = 0; }
+      } else if (waterNow < 0.15) {
+        // 水很少→挣扎（游速紊乱）
+        if (fish.state === 'swim' || fish.state === 'idle' || fish.state === 'seekFood' || fish.state === 'struggle') fish.state = 'struggle';
+      }
+    }
+
     if (!fish.dead && fish.state !== 'reviving' && !fish.eaten) {
       // 鱼眼追踪光标（瞳孔偏向光标方向）
       if (cursorInTank) {
@@ -1029,7 +1083,19 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         }
       }
 
-      if (fish.state === 'seekFood') {
+      if (fish.state === 'float') {
+        // 过食翻肚：翻白肚漂在水面（用正常鱼色），随波轻荡 + 打嗝，~12s后恢复正常
+        fish.flipProgress = 1;
+        fish.y = waterTop + 5 + Math.sin(t * 1.2) * 1.5;
+        fish.x += (Math.random() - 0.5) * 0.3;
+        fish.x = Math.max(14, Math.min(AQ_W - 14, fish.x));
+        if (fish.stateTimer % 34 === 0) spawnMouthBubbles(1); // 打嗝
+        if (fish.stateTimer >= 720) {
+          fish.state = 'swim'; fish.stateTimer = 0; fish.flipProgress = 0;
+          fish.tx = fish.x; fish.ty = Math.max(waterTop + 14, 16);
+          fish.celebrate = 40; addRipple(fish.x, waterTop + 4);
+        }
+      } else if (fish.state === 'seekFood') {
         if (foodTarget) {
           var fdx = foodTarget.x - fish.x, fdy = foodTarget.y - fish.y;
           var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
@@ -1225,6 +1291,35 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     aridF += ((waterNow < 0.08 ? 1 : 0) - aridF) * 0.045;
     if (aridF < 0.001) aridF = 0; if (aridF > 0.999) aridF = 1;
 
+    // === 峰→谷过场：水涨回鱼复活（水位驱动）===
+    if (fish.dead && waterNow > 0.25) {
+      fish.dead = false; fish.state = 'reviving'; fish.stateTimer = 0; fish.flipProgress = 1;
+      burstBubbles();
+    }
+    // === 峰→谷天气状态机（乌云→闪电+雨→雨收）===
+    if (weather > 0) {
+      weatherT++;
+      if (weather === 1 && weatherT > 26) {
+        weather = 2; weatherT = 0; rainDrops.length = 0;
+        for (var ri = 0; ri < 22; ri++) rainDrops.push({ x: Math.random() * AQ_W, y: Math.random() * Math.max(12, waterTop - 4), vy: 1.4 + Math.random() * 1.4 });
+      } else if (weather === 2) {
+        if (Math.random() < 0.018) lightningFlash = 6;      // 闪电（无声音）
+        // 水填够（达到水位目标或至少0.5）→ 雨收；超时兜底避免谷末段一直下雨
+        if (waterNow > Math.max(0.5, waterTarget * 0.92) || weatherT > 260) { weather = 3; weatherT = 0; }
+      } else if (weather === 3) {
+        if (weatherT > 50) { weather = 0; rainDrops.length = 0; } // 云散
+      }
+    }
+    if (lightningFlash > 0) lightningFlash--;
+    // === 过食翻肚：近8s投喂≥4次且有足够水 → 鱼翻肚漂水面 ===
+    while (feedTimes.length && Date.now() - feedTimes[0] > 8000) feedTimes.shift();
+    if (feedTimes.length >= 4 && waterNow > 0.3 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving' && fish.state !== 'struggle') {
+      feedTimes.length = 0;
+      food.length = 0;                        // 吃掉太多，清空缸里剩余
+      fish.state = 'float'; fish.stateTimer = 0; fish.flipProgress = 0;
+      addRipple(fish.x, Math.max(waterTop + 4, 14));
+    }
+
     // === 7. 绘制 ===
     aqCtx.clearRect(0, 0, AQ_W, AQ_H);
 
@@ -1295,6 +1390,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       // 灼热滤镜（scene.scorch）
       if (scene.scorch > 0) { aqCtx.fillStyle = 'rgba(255,180,80,' + (0.06 * scene.scorch / 70) + ')'; aqCtx.fillRect(0, 0, AQ_W, AQ_H); }
     }
+
+    // === 峰→谷过场：乌云+闪电+雨（画在水体之上）===
+    drawWeather(aqCtx, t, waterTop);
 
     var wh = AQ_H * waterNow;
     if (wh > 1) {
@@ -1423,6 +1521,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       drawDeadFish(aqCtx, fish.x, AQ_H - 8, aridF > 0.3 ? '#7d7d7d' : fish.deadColor, fish.flipProgress, flopY);   // 高峰死鱼灰色，扑腾时内部变白
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
+    } else if (fish.state === 'float') {
+      // 过食翻肚：正常鱼色翻白肚漂水面（非灰色死鱼），尾巴随波抽动
+      var fFy = Math.sin(t * 1.2) > 0.4 ? 1 : 0;
+      drawDeadFish(aqCtx, fish.x, fish.y, fish.color, 1, fFy);
     } else if (!fish.eaten) {
       // 多部位配色：golden 时只覆盖身色，尾/鳍/腹/眼沿用主题配置
       var fc = { color: drawColor, tail: fish.tail, fin: fish.fin, belly: fish.belly, eyeColor: fish.eyeColor, highlight: fish.highlight };
@@ -1560,17 +1662,20 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     else waterRGB = hexToRgb(themeColor('--accent', '#58a6ff')); // 修 bug：主题无水色才回退 accent
     // 水位 = 当前谷时段剩余比例（谷开始满水，谷结束水干）；峰=0 水干
     waterTarget = peak ? 0 : waterLevelFor(p);
-    // 鱼状态：谷=活鱼游动，峰=水干鱼死（翻白肚沉底）；切换瞬间冒泡爆发
+    // 鱼状态：谷=活鱼，峰=随水干逐渐旱死（由水位驱动，见状态机；切换只做位置/过场）
+    var prevPeak = lastFishPeak;
     if (lastFishPeak !== peak) {
       lastFishPeak = peak;
-      fish.dead = peak;
+      // 仅真正从"峰→谷"切换才触发云雨填满过场（首次渲染不触发，否则打开就下雨）
+      if (prevPeak === true && !peak) {
+        weather = 1; weatherT = 0; rainDrops.length = 0;
+      }
       if (peak) {
         fish.y = AQ_H - 10; fish.tx = fish.x; fish.ty = fish.y;
-      } else {
+      } else if (lastFishPeak === peak && prevPeak !== null) {
         fish.y = Math.max(AQ_H - AQ_H * Math.max(waterLevelFor(p), 0.2) - 12, 14);
         fish.tx = fish.x; fish.ty = fish.y;
       }
-      burstBubbles();
     }
     // 活鱼游速随水位：水满游得快，水快干游得慢（挣扎）
     if (!fish.dead) {
@@ -1745,7 +1850,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     var fdx = cx - fish.x, fdy = cy - fish.y;
     var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
-    if (fdist < 12 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving') {
+    if (fdist < 12 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving' && fish.state !== 'float') {
       // 点鱼身 → 敲缸受惊（急逃）
       fish.state = 'dart'; fish.stateTimer = 0;
       fish.dir = cx > AQ_W / 2 ? -1 : 1;
