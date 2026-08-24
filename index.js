@@ -1,8 +1,8 @@
 // @ts-nocheck
 /**
- * aqua-deepseek — HD 插件：像素鱼缸 DeepSeek 价格浮窗
+ * aqua-deepseek — DeepSeek Harness 插件：像素鱼缸 DeepSeek 价格浮窗
  * 1. 注册 aqua_price 工具（查价格/获取嵌入码/设主题）
- * 2. 在 HD 页面注入鱼缸浮窗（webServer 路由 + index-inject）
+ * 2. 在 DeepSeek Harness 页面注入鱼缸浮窗（webServer 路由 + index-inject）
  */
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { readFileSync } from 'node:fs';
@@ -52,7 +52,7 @@ function parsePricing(html) {
     return { models, segments, weekendOff: html.includes('周末') };
 }
 export function apply(ctx) {
-    // ---- 1. 注入鱼缸浮窗到 HD 页面 ----
+    // ---- 1. 注入鱼缸浮窗到 DeepSeek Harness 页面 ----
     let widgetCode = '';
     try {
         widgetCode = readFileSync(join(import.meta.dirname || __dirname, 'deepseek-price-widget.js'), 'utf-8');
@@ -74,18 +74,18 @@ export function apply(ctx) {
                 res.end(widgetCode);
             },
         });
-        // 注入：HD 配套主题 CSS + JS + 浮窗脚本
+        // 注入：DeepSeek Harness 配套主题 CSS + JS + 浮窗脚本
         ctx.on('webserver/index-inject', (table) => {
-            // HD 主题 CSS 变量覆盖（白底深色文字蓝色强调）
+            // DeepSeek Harness 主题 CSS 变量覆盖（白底深色文字蓝色强调）
             table.push({
                 kind: 'style',
                 text: `#ds-price-widget-host{--card:#f9fafb;--card2:#f5f6f7;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);--text:#0f1115;--text-secondary:#61666b;--text-tertiary:#81858c;--accent:rgb(65,118,230);--accent2:rgb(50,100,200);--warn:rgb(230,130,50);--green:rgb(50,180,80);--shadow:0 2px 8px rgba(0,0,0,.08);}`,
             });
-            // HD 专属鱼缸主题（深色鱼 + 蓝水）
+            // DeepSeek Harness 专属鱼缸主题（深色鱼 + 蓝水）
             table.push({
                 kind: 'script',
                 placement: 'head',
-                text: `window.__AQUA_THEME__='hd';window.AQUA_THEMES=window.AQUA_THEMES||{};window.AQUA_THEMES.hd={fishColor:'#1a1d21',deadColor:'#81858c',waterRGB:'65,118,230',decorations:[]};`,
+                text: `window.__AQUA_THEME__='harness';window.AQUA_THEMES=window.AQUA_THEMES||{};window.AQUA_THEMES.harness={fishColor:'#1a1d21',deadColor:'#81858c',waterRGB:'65,118,230',decorations:[]};`,
             });
             // 加载浮窗
             table.push({
@@ -117,7 +117,7 @@ export function apply(ctx) {
             const act = action || 'pricing';
             if (act === 'widget') {
                 try {
-                    return `🐟 Aqua DeepSeek 浮窗 JS（${Math.round(widgetCode.length / 1024)}KB）已注入 HD 页面。\n\n主题设置：window.__AQUA_THEME__ = 'winter'（可选 default/winter/autumn/spring）`;
+                    return `🐟 Aqua DeepSeek 浮窗 JS（${Math.round(widgetCode.length / 1024)}KB）已注入 DeepSeek Harness 页面。\n\n主题设置：window.__AQUA_THEME__ = 'winter'（可选 default/winter/autumn/spring）`;
                 }
                 catch (e) {
                     return `❌ 读取 widget 文件失败: ${e.message}`;
