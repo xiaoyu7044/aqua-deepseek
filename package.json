@@ -1,6 +1,6 @@
 {
   "name": "aqua-deepseek",
-  "version": "3.6.3",
+  "version": "3.7.0",
   "description": "DeepSeek API 实时价格鱼缸浮窗 — 一键装进 DeepSeek Harness，像素风陪伴式动画，自动跟随峰谷时段",
   "type": "module",
   "main": "index.js",
@@ -33,6 +33,9 @@
     "examples/",
     "docs/",
     "README.md",
+    "README.en.md",
+    "CONFIG_GUIDE.md",
+    "aqua-config-template.json",
     "LICENSE"
   ],
   "dsh": {
