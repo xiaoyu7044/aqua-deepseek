@@ -258,6 +258,7 @@
   var CLOSE_TTL = 6 * 3600 * 1000; // localStorage 兜底关闭有效期: 6 小时内不复活
   var CONFIG_KEY = '__ds_price_config__';
   var configUrl = '/api/ds-price-config'; // 后端配置接口
+  var _serverTimeOffset = 0; // 服务器时间偏移（ms），峰谷判断用准确北京时间
 
   // 应用后端配置：时段 / 周末规则 / 模型价格，全部可被官网自动更新覆盖
   function applyConfig(cfg) {
@@ -288,7 +289,10 @@
         }
       }
     } catch (e) {}
-    fetch(configUrl).then(function(r) { return r.json(); }).then(function(cfg) {
+    fetch(configUrl).then(function(r) {
+      try { var srvDate = r.headers.get('Date'); if (srvDate) _serverTimeOffset = new Date(srvDate).getTime() - Date.now(); } catch (e) {}
+      return r.json();
+    }).then(function(cfg) {
       applyConfig(cfg);
       try {
         localStorage.setItem(CONFIG_KEY, JSON.stringify({
@@ -310,7 +314,7 @@
     return w === 0 || w === 6; // 周日 / 周六
   }
   function nowParts() {
-    var d = new Date();
+    var d = new Date(Date.now() + _serverTimeOffset);
     return { d: d, h: d.getHours(), m: d.getMinutes(), s: d.getSeconds(), dow: d.getDay(), ts: d.getTime() };
   }
   function isPeak(h, m, dow) {
@@ -2185,7 +2189,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   var tlCursor = null;
   function buildTimeline() {
-    var isWk = isWeekendDay(new Date());
+    var isWk = isWeekendDay(new Date(Date.now() + _serverTimeOffset));
     var segs = [
       { s: 0, e: 9, type: 'off' },
       { s: 9, e: 12, type: isWk ? 'off' : 'peak' },
