@@ -107,7 +107,7 @@ window.AQUA_DEEPSEEK_CONFIG = {
     fishSpeedScale: 0.7,    // 鱼速系数
     overflowFeedCount: 50,  // ★ 4秒内吃掉≥50粒鱼食才翻白
     overflowWindow: 4000,   // ★ 过食窗口（毫秒）
-    overflowDuration: 720,  // 翻白持续（帧，720≈12秒）
+    overflowDuration: 300,  // 翻白持续（帧，300≈5秒）
     eggProbBase: 0.0025,    // 彩蛋基础概率
     eggProbMax: 0.011,      // 彩蛋概率上限
     eggWaterMin: 15         // 彩蛋所需最低水位(px)

@@ -69,7 +69,7 @@
       flopMin: 180, flopRange: 421,
       eggCooldownMin: 450, eggCooldownRange: 900, eggStartFrame: 750,
       eggProbBase: 0.0025, eggProbScale: 30000, eggProbMax: 0.011, eggWaterMin: 15,
-      overflowFeedCount: 50, overflowWindow: 4000, overflowDuration: 720,
+      overflowFeedCount: 50, overflowWindow: 4000, overflowDuration: 300,
     },
     themes: {
       default: { fishColor: null, deadColor: null, waterRGB: null },
