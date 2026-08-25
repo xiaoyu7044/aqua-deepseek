@@ -1448,6 +1448,20 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       }
     }
 
+    // === 过食翻白：浮水面漂 + 打嗝，overflowDuration 帧后恢复（必须独立于下面"非float"守卫块）===
+    if (fish.state === 'float') {
+      fish.flipProgress = 1;
+      fish.y = waterTop + 5 + Math.sin(t * 1.2) * 1.5;
+      fish.x += (Math.random() - 0.5) * 0.3;
+      fish.x = Math.max(14, Math.min(AQ_W - 14, fish.x));
+      if (fish.stateTimer % 34 === 0) spawnMouthBubbles(1); // 打嗝
+      if (fish.stateTimer >= CFG.physics.overflowDuration) {
+        fish.state = 'swim'; fish.stateTimer = 0; fish.flipProgress = 0;
+        fish.tx = fish.x; fish.ty = Math.max(waterTop + 14, 16);
+        fish.celebrate = 40; addRipple(fish.x, waterTop + 4);
+      }
+    }
+
     if (!fish.dead && fish.state !== 'reviving' && fish.state !== 'float' && !fish.eaten) {
       // 鱼眼追踪光标（瞳孔偏向光标方向）
       if (cursorInTank) {
@@ -1477,19 +1491,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         }
       }
 
-      if (fish.state === 'float') {
-        // 过食翻肚：翻白肚漂在水面（用正常鱼色），随波轻荡 + 打嗝，~12s后恢复正常
-        fish.flipProgress = 1;
-        fish.y = waterTop + 5 + Math.sin(t * 1.2) * 1.5;
-        fish.x += (Math.random() - 0.5) * 0.3;
-        fish.x = Math.max(14, Math.min(AQ_W - 14, fish.x));
-        if (fish.stateTimer % 34 === 0) spawnMouthBubbles(1); // 打嗝
-        if (fish.stateTimer >= CFG.physics.overflowDuration) {
-          fish.state = 'swim'; fish.stateTimer = 0; fish.flipProgress = 0;
-          fish.tx = fish.x; fish.ty = Math.max(waterTop + 14, 16);
-          fish.celebrate = 40; addRipple(fish.x, waterTop + 4);
-        }
-      } else if (fish.state === 'seekFood') {
+      if (fish.state === 'seekFood') {
         if (foodTarget) {
           var fdx = foodTarget.x - fish.x, fdy = foodTarget.y - fish.y;
           var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
