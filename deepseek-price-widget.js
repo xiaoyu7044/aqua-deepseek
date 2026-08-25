@@ -63,7 +63,7 @@
     peakMottos: ['\u6881\u6587\u5cf0\u4e0a\u73ed\uff0c\u94b1\u5305\u6253\u70ca', '\u4eba\u6324\u4eba\uff0c\u6881\u6587\u5cf0\u7b11\u7eb3', '\u73b0\u5728\u8c03\u7528\uff0c\u90fd\u662f\u6881\u6587\u5cf0\u4ef7', '\u9519\u5cf0\u4e00\u65f6\u723d\uff0c\u4e00\u76f4\u9519\u5cf0\u4e00\u76f4\u723d', '\u9ad8\u5cf0\u8def\u4e0a\uff0c\u6881\u6587\u5cf0\u6536\u8fc7\u8def\u8d39'],
     offMottos:  ['\u6881\u6587\u8c37\u8425\u4e1a\uff0c\u534a\u4ef7\u6360\u6f0f', '\u8c37\u5e95\u98ce\u666f\u597d\uff0c\u6881\u6587\u8c37\u8bf7\u5ba2', '\u8d81\u6881\u6587\u8c37\u5728\uff0c\u591a\u56e4\u70b9 token', '\u591c\u732b\u5b50\u798f\u5229\uff0c\u6881\u6587\u8c37\u4e70\u5355', '\u4f4e\u8c37\u6284\u5e95\uff0c\u6881\u6587\u8c37\u966a\u4f60'],
     physics: {
-      waterDamp: 0.04, aridDamp: 0.045, aridThreshold: 0.08, aridFull: 0.5,
+      waterDamp: 0.004, aridDamp: 0.045, aridThreshold: 0.08, aridFull: 0.5,
       struggleLevel: 0.15, deadLevel: 0.08, reviveLevel: 0.25, valleyMin: 0.35,
       fishSpeedBase: 0.35, fishSpeedScale: 0.7,
       flopMin: 180, flopRange: 421,

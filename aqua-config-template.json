@@ -63,7 +63,7 @@
     }
   },
   "physics": {
-    "waterDamp": 0.04,
+    "waterDamp": 0.004,
     "aridDamp": 0.045,
     "aridThreshold": 0.08,
     "aridFull": 0.5,
