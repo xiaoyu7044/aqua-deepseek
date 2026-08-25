@@ -99,7 +99,7 @@ window.AQUA_DEEPSEEK_CONFIG = {
 
   /* ── 3. 物理 / 行为参数 ────────────────────────── */
   physics: {
-    waterDamp: 0.04,        // 水位变化速率（越小越慢）
+    waterDamp: 0.004,       // 水位变化速率（越小越慢；过场水干/水涨约15s）
     valleyMin: 0.35,        // 谷时段最低水位（保证鱼不死）
     aridThreshold: 0.08,    // 进入干旱的阈值
     aridFull: 0.5,          // 完全干旱
