@@ -1,0 +1,864 @@
+{
+  "// 说明": "以下为完整默认配置。要覆盖某字段，复制到 window.AQUA_DEEPSEEK_CONFIG 中另值即可。数组/对象是深合并，可只改子字段。",
+  "peakSegments": [
+    [
+      9,
+      12
+    ],
+    [
+      14,
+      18
+    ]
+  ],
+  "weekendOff": true,
+  "defaultModel": "flash",
+  "peakName": "梁文峰",
+  "offName": "梁文谷",
+  "peakMottos": [
+    "梁文峰上班，钱包打蔫",
+    "人挤人，梁文峰笑纳",
+    "现在调用，都是梁文峰价",
+    "错峰一时爽，一直错峰一直爽",
+    "高峰路上，梁文峰收过路费"
+  ],
+  "offMottos": [
+    "梁文谷营业，半价捡漏",
+    "谷底风景好，梁文谷请客",
+    "趁梁文谷在，多囤点 token",
+    "夜猫子福利，梁文谷买单",
+    "低谷抄底，梁文谷陪你"
+  ],
+  "models": {
+    "flash": {
+      "name": "DeepSeek-V4-Flash",
+      "ver": "0731",
+      "cacheHit": {
+        "off": 0.05,
+        "peak": 0.1
+      },
+      "cacheMiss": {
+        "off": 1.5,
+        "peak": 3.0
+      },
+      "output": {
+        "off": 4.5,
+        "peak": 9.0
+      }
+    },
+    "pro": {
+      "name": "DeepSeek-V4-Pro",
+      "ver": "0813",
+      "cacheHit": {
+        "off": 0.15,
+        "peak": 0.3
+      },
+      "cacheMiss": {
+        "off": 4.5,
+        "peak": 9.0
+      },
+      "output": {
+        "off": 13.5,
+        "peak": 27.0
+      }
+    }
+  },
+  "physics": {
+    "waterDamp": 0.04,
+    "aridDamp": 0.045,
+    "aridThreshold": 0.08,
+    "aridFull": 0.5,
+    "struggleLevel": 0.15,
+    "deadLevel": 0.08,
+    "reviveLevel": 0.25,
+    "valleyMin": 0.35,
+    "fishSpeedBase": 0.35,
+    "fishSpeedScale": 0.7,
+    "flopMin": 180,
+    "flopRange": 421,
+    "eggCooldownMin": 450,
+    "eggCooldownRange": 900,
+    "eggStartFrame": 750,
+    "eggProbBase": 0.0025,
+    "eggProbScale": 30000,
+    "eggProbMax": 0.011,
+    "eggWaterMin": 15,
+    "overflowFeedCount": 50,
+    "overflowWindow": 4000,
+    "overflowDuration": 720
+  },
+  "activeTheme": "default",
+  "themes": {
+    "default": {
+      "fishColor": null,
+      "deadColor": null,
+      "waterRGB": null
+    },
+    "winter": {
+      "fishColor": "#c8daf0",
+      "fishFin": "#a0b8d8",
+      "fishTail": "#a0b8d8",
+      "fishBelly": "#e8f0f8",
+      "deadColor": "#8899aa",
+      "waterRGB": "140,180,220",
+      "decorations": [
+        "snow"
+      ]
+    },
+    "autumn": {
+      "fishColor": "#d4a050",
+      "fishFin": "#8b6914",
+      "fishTail": "#8b6914",
+      "deadColor": "#8b7355",
+      "waterRGB": "200,150,60",
+      "decorations": [
+        "leaves"
+      ]
+    },
+    "spring": {
+      "fishColor": "#f0d0d8",
+      "fishFin": "#d0a0b0",
+      "fishTail": "#d0a0b0",
+      "fishBelly": "#f8e8ec",
+      "deadColor": "#b09098",
+      "waterRGB": "160,200,220",
+      "decorations": [
+        "petals"
+      ]
+    },
+    "harness": {
+      "fishColor": "#1a1d21",
+      "deadColor": "#6e7681",
+      "waterRGB": "65,118,230"
+    }
+  },
+  "desert": {
+    "skyTop": [
+      255,
+      210,
+      130
+    ],
+    "skyMid": [
+      240,
+      185,
+      110
+    ],
+    "skyBot": [
+      200,
+      150,
+      75
+    ],
+    "skyAlpha": [
+      0.7,
+      0.65,
+      0.75
+    ],
+    "sunColor": [
+      255,
+      248,
+      180
+    ],
+    "sunAlpha": 1.0,
+    "sunHalo": [
+      255,
+      240,
+      150
+    ],
+    "sunHaloAlpha": 0.5,
+    "sunHaloRadius": 14,
+    "sunMid": [
+      255,
+      235,
+      120
+    ],
+    "sunMidAlpha": 0.35,
+    "sunMidRadius": 20,
+    "sunOuter": [
+      255,
+      220,
+      80
+    ],
+    "sunOuterAlpha": 0.18,
+    "sunOuterRadius": 28,
+    "sunRadius": 6,
+    "duneColor": [
+      196,
+      144,
+      74
+    ],
+    "duneAlpha": 0.4,
+    "sandColor": [
+      [
+        164,
+        122,
+        64,
+        0.5
+      ],
+      [
+        132,
+        94,
+        48,
+        0.6
+      ]
+    ],
+    "waveColor": [
+      150,
+      108,
+      58
+    ],
+    "waveAlpha": 0.4,
+    "cactusColor": [
+      58,
+      88,
+      48
+    ],
+    "cactusAlpha": 0.5,
+    "deadtreeColor": [
+      92,
+      66,
+      40
+    ],
+    "deadtreeAlpha": 0.5,
+    "crackColor": [
+      76,
+      52,
+      26
+    ],
+    "crackAlpha": 0.5,
+    "heatAlpha": 0.03,
+    "windAlpha": 0.4,
+    "scorchAlpha": 0.06,
+    "fishDeadColor": "#7d7d7d"
+  },
+  "aquatic": {
+    "dustColors": [
+      "#445566",
+      "#556677",
+      "#667788"
+    ],
+    "dustCount": 25,
+    "beamAlpha": 0.025,
+    "beamAlphaPulse": 0.008,
+    "seaweedColors": [
+      [
+        "#174234",
+        "#1b4d31"
+      ],
+      [
+        "#2a6e46",
+        "#1f5c3a"
+      ],
+      [
+        "#2f7f52",
+        "#3b8a5f"
+      ]
+    ],
+    "seaweedTipColor": "#c8a95c",
+    "seaweedDarkColor": "#143629",
+    "seaweedBodyColor": "#8a6f3a"
+  },
+  "fish": {
+    "headColor": [
+      40,
+      30,
+      20
+    ],
+    "headAlpha": 0.85,
+    "bodyColor": [
+      255,
+      240,
+      160
+    ],
+    "bodyAlphaYoung": 0.9,
+    "bodyAlphaOld": 0.4,
+    "bodyShimmerFreq": 0.5,
+    "bodyShimmerBase": 0.25,
+    "bodyShimmerAmp": 0.12,
+    "bodyShimmerColor": [
+      200,
+      168,
+      110
+    ],
+    "darkDetailColor": [
+      90,
+      60,
+      30
+    ],
+    "darkDetailAlpha": 0.7,
+    "finDarkColor": [
+      120,
+      180,
+      220
+    ],
+    "finDarkAlpha": 0.25,
+    "finDarkAlpha2": 0.12,
+    "bellyHighlight": [
+      255,
+      255,
+      255
+    ],
+    "bellyHighlightAlpha": 0.06,
+    "eyeHighlightColor": [
+      255,
+      230,
+      150
+    ],
+    "eyeHighlightYoung": 0.28,
+    "eyeHighlightOld": 0.1,
+    "eyeShadow": [
+      60,
+      40,
+      20
+    ],
+    "eyeShadowAlpha": 0.25,
+    "scaleDetailColor": [
+      200,
+      168,
+      110
+    ],
+    "scaleDetailAlpha": 0.2,
+    "scaleDetailAmp": 0.1,
+    "scaleHighlightColor": [
+      220,
+      190,
+      120
+    ],
+    "scaleHighlightAlpha": 0.5,
+    "blushColor": [
+      255,
+      150,
+      160
+    ],
+    "blushAlpha": 0.5,
+    "mouthColor": [
+      34,
+      34,
+      34
+    ],
+    "flopWhite": [
+      255,
+      255,
+      255
+    ]
+  },
+  "creatures": {
+    "jellyBody": [
+      200,
+      225,
+      255
+    ],
+    "jellyBodyAlpha": 0.6,
+    "jellyTentacleAlpha": 0.35,
+    "squidBody": [
+      180,
+      106,
+      216
+    ],
+    "squidBodyAlpha": 1,
+    "squidTentacleAlpha": 0.5,
+    "crabBody": [
+      216,
+      100,
+      42
+    ],
+    "crabEye": [
+      0,
+      0,
+      0
+    ],
+    "starBody": [
+      232,
+      155,
+      106
+    ],
+    "turtleShell": [
+      79,
+      143,
+      58
+    ],
+    "turtleShellLight": [
+      111,
+      174,
+      87
+    ],
+    "turtleShellDark": [
+      58,
+      111,
+      44
+    ],
+    "turtleBelly": [
+      176,
+      216,
+      136
+    ],
+    "shadowColor": [
+      10,
+      15,
+      20
+    ],
+    "shadowAlpha": 0.35,
+    "boneColor": [
+      224,
+      216,
+      200
+    ],
+    "snailBody": [
+      176,
+      138,
+      82
+    ],
+    "snailShell": [
+      122,
+      98,
+      56
+    ]
+  },
+  "aridFx": {
+    "weedBody": [
+      201,
+      164,
+      90
+    ],
+    "weedCenter": [
+      138,
+      111,
+      58
+    ],
+    "cactusBody": [
+      63,
+      125,
+      67
+    ],
+    "cactusTip": [
+      90,
+      162,
+      90
+    ],
+    "vultureBody": [
+      40,
+      30,
+      20
+    ],
+    "vultureAlpha": 0.85,
+    "lightningStroke": [
+      255,
+      240,
+      160
+    ],
+    "lightningYoung": 0.9,
+    "lightningOld": 0.4,
+    "sandColor": [
+      200,
+      168,
+      110
+    ],
+    "sandAlphaBase": 0.25,
+    "sandAlphaStep": 0.12,
+    "drygrassColor": [
+      200,
+      176,
+      96
+    ],
+    "crackLine": [
+      90,
+      60,
+      30
+    ],
+    "crackAlpha": 0.7,
+    "lizardBody": [
+      154,
+      127,
+      62
+    ],
+    "snakeBody": [
+      169,
+      122,
+      60
+    ],
+    "snakeEye": [
+      0,
+      0,
+      0
+    ],
+    "deadTreeBody": [
+      90,
+      70,
+      48
+    ],
+    "heatColor": [
+      255,
+      255,
+      255
+    ],
+    "heatAlpha": 0.06,
+    "mirageBody": [
+      120,
+      180,
+      220
+    ],
+    "mirageAlpha": 0.25,
+    "mirageAlpha2": 0.12,
+    "sunFlashColor": [
+      255,
+      230,
+      150
+    ],
+    "sunFlashBright": 0.28,
+    "sunFlashDim": 0.1,
+    "dshadowColor": [
+      60,
+      40,
+      20
+    ],
+    "dshadowAlpha": 0.25,
+    "duneColor": [
+      150,
+      110,
+      58
+    ],
+    "duneAlphaBase": 0.25,
+    "duneAlphaAmp": 0.08,
+    "bubColor": [
+      220,
+      190,
+      120
+    ],
+    "bubAlpha": 0.5,
+    "dust2Color": [
+      200,
+      168,
+      110
+    ],
+    "dust2AlphaBase": 0.2,
+    "dust2AlphaStep": 0.1
+  },
+  "weather": {
+    "cloudColor": [
+      60,
+      68,
+      82
+    ],
+    "flashScreenColor": [
+      255,
+      255,
+      255
+    ],
+    "flashScreenAlpha": 0.4,
+    "flashBoltColor": [
+      255,
+      244,
+      190
+    ],
+    "flashBoltAlpha": 0.9,
+    "rainColor": [
+      190,
+      215,
+      245
+    ],
+    "rainAlpha": 0.6,
+    "reviveBlush": [
+      255,
+      150,
+      160
+    ],
+    "reviveBlushAlpha": 0.5
+  },
+  "effects": {
+    "bubbleGrad0": [
+      255,
+      255,
+      255
+    ],
+    "bubbleGrad0Alpha": 0.15,
+    "bubbleGrad1": [
+      200,
+      230,
+      255
+    ],
+    "bubbleGrad1Alpha": 0.4,
+    "bubbleGrad2": [
+      180,
+      220,
+      255
+    ],
+    "bubbleGrad2Alpha": 0.1,
+    "bubbleColorGrad0": [
+      255,
+      255,
+      255
+    ],
+    "bubbleColorGrad0Alpha": 0.25,
+    "bubbleColorGrad2": [
+      255,
+      255,
+      255
+    ],
+    "bubbleColorGrad2Alpha": 0.1,
+    "causticColor": [
+      255,
+      255,
+      255
+    ],
+    "causticAlpha": 0.06,
+    "lightBeamColor": [
+      255,
+      255,
+      255
+    ],
+    "flowHighlightColor": [
+      255,
+      255,
+      255
+    ],
+    "flowHighlightAlpha": 0.04,
+    "surfaceHighlightColor": [
+      255,
+      255,
+      255
+    ],
+    "surfaceHighlightAlpha": 0.1,
+    "rippleColor": [
+      255,
+      255,
+      255
+    ],
+    "dustColor": [
+      255,
+      255,
+      255
+    ],
+    "foodColor": [
+      200,
+      120,
+      40
+    ],
+    "foodColorDark": [
+      160,
+      100,
+      30
+    ],
+    "heartColor": [
+      255,
+      180,
+      200
+    ],
+    "vignetteColor": [
+      0,
+      0,
+      0
+    ],
+    "vignetteAlpha": 0.06,
+    "eggColors": [
+      "#f0b429",
+      "#5aa9e6",
+      "#f2a6c2",
+      "#9be564",
+      "#c89bf0"
+    ],
+    "dustParticleColors": [
+      "#4a5a6a",
+      "#6a5a4a"
+    ],
+    "heartColors": [
+      "#ff8ab0",
+      "#ff5c8a"
+    ],
+    "burstColors": [
+      "#ff5f57",
+      "#ffbd2e",
+      "#28c840",
+      "#45a1ff",
+      "#b45cff",
+      "#ff7ad1"
+    ],
+    "goldenColor": "#f6c945",
+    "windLineColor": [
+      210,
+      175,
+      115
+    ],
+    "windLineAlpha": 0.4,
+    "toastOverlay": [
+      0,
+      0,
+      0
+    ],
+    "toastOverlayAlpha": 0.5
+  },
+  "panelCss": {
+    "darkBg": [
+      22,
+      27,
+      34
+    ],
+    "darkBgAlpha": 0.88,
+    "darkPanelBg": [
+      13,
+      17,
+      23
+    ],
+    "darkPanelBgAlpha": 0.88,
+    "darkPanelBg2": [
+      13,
+      17,
+      23
+    ],
+    "darkPanelBg2Alpha": 0.82,
+    "darkOverlay": [
+      0,
+      0,
+      0
+    ],
+    "darkOverlayAlpha": 0.35,
+    "darkOverlayLight": [
+      0,
+      0,
+      0
+    ],
+    "darkOverlayLightAlpha": 0.25,
+    "darkOverlayLighter": [
+      0,
+      0,
+      0
+    ],
+    "darkOverlayLighterAlpha": 0.22,
+    "darkOverlaySubtle": [
+      0,
+      0,
+      0
+    ],
+    "darkOverlaySubtleAlpha": 0.08,
+    "darkDivider": [
+      255,
+      255,
+      255
+    ],
+    "darkDividerAlpha": 0.08,
+    "lightBg": [
+      255,
+      255,
+      255
+    ],
+    "lightBgAlpha": 0.92,
+    "lightOverlay": [
+      0,
+      0,
+      0
+    ],
+    "lightOverlayAlpha": 0.08,
+    "lightOverlay2": [
+      0,
+      0,
+      0
+    ],
+    "lightOverlay2Alpha": 0.06,
+    "accentWarn": [
+      240,
+      136,
+      62
+    ],
+    "accentWarnAlpha": 0.22,
+    "accentWarnLight": [
+      240,
+      136,
+      62
+    ],
+    "accentWarnLightAlpha": 0.18,
+    "accentWarnLighter": [
+      240,
+      136,
+      62
+    ],
+    "accentWarnLighterAlpha": 0.14,
+    "accentBlue": [
+      88,
+      166,
+      255
+    ],
+    "accentBlueAlpha": 0.2,
+    "accentBlueLight": [
+      88,
+      166,
+      255
+    ],
+    "accentBlueLightAlpha": 0.08,
+    "accentGreen": [
+      63,
+      185,
+      80
+    ],
+    "accentGreenAlpha": 0.14,
+    "accentGreenLight": [
+      63,
+      185,
+      80
+    ],
+    "accentGreenLightAlpha": 0.13,
+    "accentRed": [
+      248,
+      81,
+      73
+    ],
+    "accentRedAlpha": 0.2,
+    "accentRedLight": [
+      248,
+      81,
+      73
+    ],
+    "accentRedLightAlpha": 0.12,
+    "darkShadow": [
+      0,
+      0,
+      0
+    ],
+    "darkShadowAlpha": 0.4
+  },
+  "ui": {
+    "barBg": "rgba(22,27,34,.82)",
+    "barBorder": "#21262d",
+    "panelBg": "#161b22",
+    "panelBorder": "#30363d",
+    "toastBg": "#161b22",
+    "toastBorder": "#30363d",
+    "warnColor": "#f0883e",
+    "accentColor": "#58a6ff",
+    "accent2Color": "#3fb950",
+    "textColor": "#e6edf3",
+    "textSecondary": "#8b949e",
+    "textTertiary": "#6e7681",
+    "lightPanelBg": "#fffdf9",
+    "lightBorder": "#d0d7de",
+    "lightBg": "#f7f3ea",
+    "lightText": "#1f2328",
+    "lightTextSecondary": "#656d76",
+    "lightTextTertiary": "#8c959f",
+    "lightAccent": "#0969da",
+    "lightAccent2": "#1a7f37",
+    "lightWarn": "#cf222e"
+  },
+  "i18n": {
+    "closeLabel": "关闭",
+    "scheduleLabel": "值班表",
+    "halfPriceLabel": " 半价",
+    "inputLabel": "输入",
+    "outputLabel": "输出",
+    "cacheHit": "缓存命中",
+    "cacheMiss": "缓存未命中",
+    "unitLabel": "元/百万tokens",
+    "peakPeriodLabel": " · 高峰时段",
+    "offPeriodLabel": " · 空闲时段 (半价)",
+    "switchToSuffix": " 后转",
+    "countdownOffMsg": " 秒后接棒，半价开抢！",
+    "countdownPeakMsg": " 秒后上班，钱包快跑！",
+    "companionPrefixOff": "再陪 ",
+    "companionPrefixPeak": "再榨 ",
+    "toOffSuffix": " 后转空闲",
+    "toPeakSuffix": " 后转高峰",
+    "switchAlertPeak": "上班了！",
+    "switchAlertOff": "接棒，半价开抢！",
+    "timeLabel": "时段 (北京时间)",
+    "remindLabel": "切换变色提醒"
+  },
+  "eggs": [],
+  "desertMaterials": [],
+  "aquaticMaterials": []
+}

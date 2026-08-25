@@ -9,29 +9,251 @@
  *   移动端=原胶囊样式回退；不做声音；面板定位视口内 clamp 防超出屏幕；
  *   保留拖动/关闭(sessionStorage 优先 + localStorage 时间戳兜底)
  * ============================================================ */
+
+  // ═══════════════════════════════════════════════════
+  // §0 守卫
+  // ═══════════════════════════════════════════════════
 (function () {
   if (window.__DS_PRICE_WIDGET__) return;
   window.__DS_PRICE_WIDGET__ = true;
 
-  // ---- 配置 ----
-  var MODELS = {
-    flash: {
-      name: 'DeepSeek-V4-Flash',
-      ver: '0731',
-      cacheHit:  { peak: 0.10, off: 0.05 },
-      cacheMiss: { peak: 3.00, off: 1.50 },
-      output:    { peak: 9.00, off: 4.50 }
-    },
-    pro: {
-      name: 'DeepSeek-V4-Pro',
-      ver: '0813',
-      cacheHit:  { peak: 0.30, off: 0.15 },
-      cacheMiss: { peak: 9.00, off: 4.50 },
-      output:    { peak: 27.00, off: 13.50 }
+
+  // ═══════════════════════════════════════════════════
+  // §1 配置系统 — DEFAULT_CONFIG + 深度合并 + 远程加载
+  // ═══════════════════════════════════════════════════
+  // ============================================================
+  // DEFAULT_CONFIG — 所有可配置项的默认值
+  // 通过 window.AQUA_DEEPSEEK_CONFIG 在加载前注入覆盖
+  // ============================================================
+  function _deepMerge(target, source) {
+    if (!source) return target;
+    var out = {};
+    for (var k in target) { if (target.hasOwnProperty(k)) out[k] = target[k]; }
+    for (var k2 in source) {
+      if (!source.hasOwnProperty(k2)) continue;
+      if (out[k2] && typeof out[k2] === 'object' && !Array.isArray(out[k2]) && typeof source[k2] === 'object' && !Array.isArray(source[k2])) {
+        out[k2] = _deepMerge(out[k2], source[k2]);
+      } else {
+        out[k2] = source[k2];
+      }
     }
+    return out;
+  }
+
+  var DEFAULT_CONFIG = {
+    peakSegments: [[9, 12], [14, 18]],
+    weekendOff: true,
+    models: {
+      flash: {
+        name: 'DeepSeek-V4-Flash', ver: '0731',
+        cacheHit: { off: 0.05, peak: 0.10 },
+        cacheMiss: { off: 1.50, peak: 3.00 },
+        output:    { off: 4.50, peak: 9.00 }
+      },
+      pro: {
+        name: 'DeepSeek-V4-Pro', ver: '0813',
+        cacheHit: { off: 0.15, peak: 0.30 },
+        cacheMiss: { off: 4.50, peak: 9.00 },
+        output:    { off: 13.50, peak: 27.00 }
+      }
+    },
+    defaultModel: 'flash',
+    peakName: '\u6881\u6587\u5cf0',
+    offName:  '\u6881\u6587\u8c37',
+    peakMottos: ['\u6881\u6587\u5cf0\u4e0a\u73ed\uff0c\u94b1\u5305\u6253\u70ca', '\u4eba\u6324\u4eba\uff0c\u6881\u6587\u5cf0\u7b11\u7eb3', '\u73b0\u5728\u8c03\u7528\uff0c\u90fd\u662f\u6881\u6587\u5cf0\u4ef7', '\u9519\u5cf0\u4e00\u65f6\u723d\uff0c\u4e00\u76f4\u9519\u5cf0\u4e00\u76f4\u723d', '\u9ad8\u5cf0\u8def\u4e0a\uff0c\u6881\u6587\u5cf0\u6536\u8fc7\u8def\u8d39'],
+    offMottos:  ['\u6881\u6587\u8c37\u8425\u4e1a\uff0c\u534a\u4ef7\u6360\u6f0f', '\u8c37\u5e95\u98ce\u666f\u597d\uff0c\u6881\u6587\u8c37\u8bf7\u5ba2', '\u8d81\u6881\u6587\u8c37\u5728\uff0c\u591a\u56e4\u70b9 token', '\u591c\u732b\u5b50\u798f\u5229\uff0c\u6881\u6587\u8c37\u4e70\u5355', '\u4f4e\u8c37\u6284\u5e95\uff0c\u6881\u6587\u8c37\u966a\u4f60'],
+    physics: {
+      waterDamp: 0.04, aridDamp: 0.045, aridThreshold: 0.08, aridFull: 0.5,
+      struggleLevel: 0.15, deadLevel: 0.08, reviveLevel: 0.25, valleyMin: 0.35,
+      fishSpeedBase: 0.35, fishSpeedScale: 0.7,
+      flopMin: 180, flopRange: 421,
+      eggCooldownMin: 450, eggCooldownRange: 900, eggStartFrame: 750,
+      eggProbBase: 0.0025, eggProbScale: 30000, eggProbMax: 0.011, eggWaterMin: 15,
+      overflowFeedCount: 50, overflowWindow: 4000, overflowDuration: 720,
+    },
+    themes: {
+      default: { fishColor: null, deadColor: null, waterRGB: null },
+      winter:  { fishColor: '#c8daf0', fishFin: '#a0b8d8', fishTail: '#a0b8d8', fishBelly: '#e8f0f8', deadColor: '#8899aa', waterRGB: '140,180,220', decorations: ['snow'] },
+      autumn:  { fishColor: '#d4a050', fishFin: '#8b6914', fishTail: '#8b6914', deadColor: '#8b7355', waterRGB: '200,150,60', decorations: ['leaves'] },
+      spring:  { fishColor: '#f0d0d8', fishFin: '#d0a0b0', fishTail: '#d0a0b0', fishBelly: '#f8e8ec', deadColor: '#b09098', waterRGB: '160,200,220', decorations: ['petals'] },
+      harness: { fishColor: '#1a1d21', deadColor: '#6e7681', waterRGB: '65,118,230' },
+    },
+    activeTheme: 'default',
+    desert: {
+      skyTop: [255,210,130], skyMid: [240,185,110], skyBot: [200,150,75],
+      skyAlpha: [0.7, 0.65, 0.75],
+      sunColor: [255,248,180], sunAlpha: 1.0, sunHalo: [255,240,150], sunHaloAlpha: 0.5,
+      sunRadius: 6, sunHaloRadius: 14,
+      sunMid: [255,235,120], sunMidAlpha: 0.35, sunMidRadius: 20,
+      sunOuter: [255,220,80], sunOuterAlpha: 0.18, sunOuterRadius: 28,
+      duneColor: [196,144,74], duneAlpha: 0.4,
+      sandColor: [[164,122,64,0.5],[132,94,48,0.6]],
+      waveColor: [150,108,58], waveAlpha: 0.4,
+      cactusColor: [58,88,48], cactusAlpha: 0.5,
+      deadtreeColor: [92,66,40], deadtreeAlpha: 0.5,
+      crackColor: [76,52,26], crackAlpha: 0.5,
+      heatAlpha: 0.03, windAlpha: 0.4, scorchAlpha: 0.06,
+      fishDeadColor: '#7d7d7d',
+    },
+    aquatic: {
+      dustColors: ['#445566','#556677','#667788'],
+      dustCount: 25,
+      beamAlpha: 0.025, beamAlphaPulse: 0.008,
+      seaweedColors: [['#174234', '#1b4d31'], ['#2a6e46', '#1f5c3a'], ['#2f7f52', '#3b8a5f']],
+      seaweedTipColor: '#c8a95c', seaweedDarkColor: '#143629', seaweedBodyColor: '#8a6f3a',
+    },
+    // 鱼体绘制颜色（像素画参数）
+    fish: {
+      headColor: [40,30,20], headAlpha: 0.85,
+      bodyColor: [255,240,160], bodyAlphaYoung: 0.9, bodyAlphaOld: 0.4,
+      bodyShimmerFreq: 0.5, bodyShimmerBase: 0.25, bodyShimmerAmp: 0.12,
+      bodyShimmerColor: [200,168,110],
+      darkDetailColor: [90,60,30], darkDetailAlpha: 0.7,
+      finDarkColor: [120,180,220], finDarkAlpha: 0.25, finDarkAlpha2: 0.12,
+      bellyHighlight: [255,255,255], bellyHighlightAlpha: 0.06,
+      eyeHighlightColor: [255,230,150], eyeHighlightYoung: 0.28, eyeHighlightOld: 0.1,
+      eyeShadow: [60,40,20], eyeShadowAlpha: 0.25,
+      scaleDetailColor: [200,168,110], scaleDetailAlpha: 0.2, scaleDetailAmp: 0.1,
+      scaleHighlightColor: [220,190,120], scaleHighlightAlpha: 0.5,
+      blushColor: [255,150,160], blushAlpha: 0.5,
+      mouthColor: [34,34,34],
+      flopWhite: [255,255,255],
+    },
+    // 水族生物颜色
+    creatures: {
+      jellyBody: [200,225,255], jellyBodyAlpha: 0.6, jellyTentacleAlpha: 0.35,
+      squidBody: [180,106,216], squidBodyAlpha: 1, squidTentacleAlpha: 0.5,
+      crabBody: [216,100,42], crabEye: [0,0,0],
+      starBody: [232,155,106],
+      turtleShell: [79,143,58], turtleShellLight: [111,174,87], turtleShellDark: [58,111,44], turtleBelly: [176,216,136],
+      shadowColor: [10,15,20], shadowAlpha: 0.35,
+      boneColor: [224,216,200],
+      snailBody: [176,138,82], snailShell: [122,98,56],
+    },
+    // 干旱生物/特效颜色
+    aridFx: {
+      weedBody: [201,164,90], weedCenter: [138,111,58],
+      cactusBody: [63,125,67], cactusTip: [90,162,90],
+      vultureBody: [40,30,20], vultureAlpha: 0.85,
+      lightningStroke: [255,240,160], lightningYoung: 0.9, lightningOld: 0.4,
+      sandColor: [200,168,110], sandAlphaBase: 0.25, sandAlphaStep: 0.12,
+      drygrassColor: [200,176,96],
+      crackLine: [90,60,30], crackAlpha: 0.7,
+      lizardBody: [154,127,62], snakeBody: [169,122,60], snakeEye: [0,0,0],
+      deadTreeBody: [90,70,48],
+      heatColor: [255,255,255], heatAlpha: 0.06,
+      mirageBody: [120,180,220], mirageAlpha: 0.25, mirageAlpha2: 0.12,
+      sunFlashColor: [255,230,150], sunFlashBright: 0.28, sunFlashDim: 0.1,
+      dshadowColor: [60,40,20], dshadowAlpha: 0.25,
+      duneColor: [150,110,58], duneAlphaBase: 0.25, duneAlphaAmp: 0.08,
+      bubColor: [220,190,120], bubAlpha: 0.5,
+      dust2Color: [200,168,110], dust2AlphaBase: 0.2, dust2AlphaStep: 0.1,
+    },
+    // 天气过场颜色
+    weather: {
+      cloudColor: [60,68,82],
+      flashScreenColor: [255,255,255], flashScreenAlpha: 0.4,
+      flashBoltColor: [255,244,190], flashBoltAlpha: 0.9,
+      rainColor: [190,215,245], rainAlpha: 0.6,
+      reviveBlush: [255,150,160], reviveBlushAlpha: 0.5,
+    },
+    // 水体效果颜色
+    effects: {
+      bubbleGrad0: [255,255,255], bubbleGrad0Alpha: 0.15,
+      bubbleGrad1: [200,230,255], bubbleGrad1Alpha: 0.4,
+      bubbleGrad2: [180,220,255], bubbleGrad2Alpha: 0.1,
+      bubbleColorGrad0: [255,255,255], bubbleColorGrad0Alpha: 0.25,
+      bubbleColorGrad2: [255,255,255], bubbleColorGrad2Alpha: 0.1,
+      causticColor: [255,255,255], causticAlpha: 0.06,
+      lightBeamColor: [255,255,255],
+      flowHighlightColor: [255,255,255], flowHighlightAlpha: 0.04,
+      surfaceHighlightColor: [255,255,255], surfaceHighlightAlpha: 0.10,
+      rippleColor: [255,255,255],
+      dustColor: [255,255,255],
+
+      foodColor: [200,120,40], foodColorDark: [160,100,30],
+      heartColor: [255,180,200],
+      vignetteColor: [0,0,0], vignetteAlpha: 0.06,
+      eggColors: ['#f0b429', '#5aa9e6', '#f2a6c2', '#9be564', '#c89bf0'],
+      dustParticleColors: ['#4a5a6a', '#6a5a4a'],
+      heartColors: ['#ff8ab0', '#ff5c8a'],
+      burstColors: ['#ff5f57', '#ffbd2e', '#28c840', '#45a1ff', '#b45cff', '#ff7ad1'],
+      goldenColor: '#f6c945',
+      windLineColor: [210,175,115], windLineAlpha: 0.4,
+      toastOverlay: [0,0,0], toastOverlayAlpha: 0.5,
+    },
+    // 面板 CSS 默认颜色（由 _syncThemeVars 动态覆盖）
+    panelCss: {
+      darkBg: [22,27,34], darkBgAlpha: 0.88,
+      darkPanelBg: [13,17,23], darkPanelBgAlpha: 0.88,
+      darkPanelBg2: [13,17,23], darkPanelBg2Alpha: 0.82,
+      darkOverlay: [0,0,0], darkOverlayAlpha: 0.35,
+      darkOverlayLight: [0,0,0], darkOverlayLightAlpha: 0.25,
+      darkOverlayLighter: [0,0,0], darkOverlayLighterAlpha: 0.22,
+      darkOverlaySubtle: [0,0,0], darkOverlaySubtleAlpha: 0.08,
+      darkDivider: [255,255,255], darkDividerAlpha: 0.08,
+      lightBg: [255,255,255], lightBgAlpha: 0.92,
+      lightOverlay: [0,0,0], lightOverlayAlpha: 0.08,
+      lightOverlay2: [0,0,0], lightOverlay2Alpha: 0.06,
+      accentWarn: [240,136,62], accentWarnAlpha: 0.22,
+      accentWarnLight: [240,136,62], accentWarnLightAlpha: 0.18,
+      accentWarnLighter: [240,136,62], accentWarnLighterAlpha: 0.14,
+      accentBlue: [88,166,255], accentBlueAlpha: 0.20,
+      accentBlueLight: [88,166,255], accentBlueLightAlpha: 0.08,
+      accentGreen: [63,185,80], accentGreenAlpha: 0.14,
+      accentGreenLight: [63,185,80], accentGreenLightAlpha: 0.13,
+      accentRed: [248,81,73], accentRedAlpha: 0.2,
+      accentRedLight: [248,81,73], accentRedLightAlpha: 0.12,
+      darkShadow: [0,0,0], darkShadowAlpha: 0.4,
+    },
+    // UI 文案（i18n）
+    i18n: {
+      closeLabel: '\u5173\u95ed',
+      scheduleLabel: '\u503c\u73ed\u8868',
+      halfPriceLabel: ' \u534a\u4ef7',
+      inputLabel: '\u8f93\u5165',
+      outputLabel: '\u8f93\u51fa',
+      cacheHit: '\u7f13\u5b58\u547d\u4e2d',
+      cacheMiss: '\u7f13\u5b58\u672a\u547d\u4e2d',
+      unitLabel: '\u5143/\u767e\u4e07tokens',
+      peakPeriodLabel: ' \u00b7 \u9ad8\u5cf0\u65f6\u6bb5',
+      offPeriodLabel: ' \u00b7 \u7a7a\u95f2\u65f6\u6bb5 (\u534a\u4ef7)',
+      switchToSuffix: ' \u540e\u8f6c',
+      countdownOffMsg: ' \u79d2\u540e\u63a5\u68d2\uff0c\u534a\u4ef7\u5f00\u62a2\uff01',
+      countdownPeakMsg: ' \u79d2\u540e\u4e0a\u73ed\uff0c\u94b1\u5305\u5feb\u8dd1\uff01',
+      companionPrefixOff: '\u518d\u966a ',
+      companionPrefixPeak: '\u518d\u69a8 ',
+      toOffSuffix: ' \u540e\u8f6c\u7a7a\u95f2',
+      toPeakSuffix: ' \u540e\u8f6c\u9ad8\u5cf0',
+      switchAlertPeak: '\u4e0a\u73ed\u4e86\uff01',
+      switchAlertOff: '\u63a5\u68d2\uff0c\u534a\u4ef7\u5f00\u62a2\uff01',
+      timeLabel: '\u65f6\u6bb5 (\u5317\u4eac\u65f6\u95f4)',
+      remindLabel: '\u5207\u6362\u53d8\u8272\u63d0\u9192',
+    },
+    ui: {
+      barBg: 'rgba(22,27,34,.82)', barBorder: '#21262d',
+      panelBg: '#161b22', panelBorder: '#30363d',
+      toastBg: '#161b22', toastBorder: '#30363d',
+      warnColor: '#f0883e', accentColor: '#58a6ff', accent2Color: '#3fb950',
+      textColor: '#e6edf3', textSecondary: '#8b949e', textTertiary: '#6e7681',
+      lightPanelBg: '#fffdf9', lightBorder: '#d0d7de', lightBg: '#f7f3ea',
+      lightText: '#1f2328', lightTextSecondary: '#656d76', lightTextTertiary: '#8c959f',
+      lightAccent: '#0969da', lightAccent2: '#1a7f37', lightWarn: '#cf222e',
+    },
+    eggs: [],
+    desertMaterials: [],
+    aquaticMaterials: [],
   };
-  var PEAK_SEGMENTS = [[9, 12], [14, 18]]; // 默认高峰时段 (北京)
-  var WEEKEND_OFF = true; // 周末(周六/周日)全天半价——官网 2026-08-23 起生效，后端配置可覆盖
+
+  var CFG = _deepMerge(DEFAULT_CONFIG, window.AQUA_DEEPSEEK_CONFIG || {});
+  var MODELS = CFG.models;
+  var PEAK_SEGMENTS = CFG.peakSegments;
+  var WEEKEND_OFF = CFG.weekendOff;
+
+  // ═══════════════════════════════════════════════════
+  // §2 配置加载（远程 + 合并）
+  // ═══════════════════════════════════════════════════
+
   var CLOSE_KEY = '__ds_price_closed__';
   var CLOSE_TTL = 6 * 3600 * 1000; // localStorage 兜底关闭有效期: 6 小时内不复活
   var CONFIG_KEY = '__ds_price_config__';
@@ -74,10 +296,15 @@
         }));
       } catch (e) {}
     }).catch(function() {});
+
+
   }
   fetchConfig();
 
-  // ---- 工具 ----
+  // ═══════════════════════════════════════════════════
+  // §3 工具函数（时间/格式化/水位）
+  // ═══════════════════════════════════════════════════
+
   function isWeekendDay(d) {
     var w = d.getDay();
     return w === 0 || w === 6; // 周日 / 周六
@@ -119,10 +346,18 @@
     return 0;
   }
 
-  // ---- 主题色（跟随主站 CSS 变量） ----
+  // ═══════════════════════════════════════════════════
+  // §4 主题色 + 水位计算
+  // ═══════════════════════════════════════════════════
+
   function themeColor(varName, fallback) {
     try {
-      var v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      var cs = getComputedStyle(document.documentElement);
+      // 优先读主站真实变量名（--accent → --accent-primary 等），无则读浮窗同名
+      var src = (typeof _THEME_VAR_SRC !== 'undefined' && _THEME_VAR_SRC[varName]) ? _THEME_VAR_SRC[varName] : varName;
+      var v = cs.getPropertyValue(src).trim();
+      if (v && /^#/.test(v)) return v;
+      v = cs.getPropertyValue(varName).trim();
       if (v && /^#/.test(v)) return v;
     } catch (e) {}
     return fallback;
@@ -163,13 +398,97 @@
     // 只有真正切换峰段(peak=true)时调用处才把 waterTarget 置 0 → 水干 → 鱼旱死 → 沙漠背景。
     var gap = Math.max(1, nextStart - prevEnd);
     var ratio = Math.max(0, Math.min(1, (nextStart - weekMin) / gap));
-    return 0.35 + 0.65 * ratio;
+    return CFG.physics.valleyMin + (1 - CFG.physics.valleyMin) * ratio;
   }
 
-  // ---- 构造 UI ----
+  // ═══════════════════════════════════════════════════
+  // §5 UI 构造 — Shadow DOM + CSS 变量
+  // ═══════════════════════════════════════════════════
   var host = document.createElement('div');
   host.id = 'ds-price-widget-host';
   var shadow = host.attachShadow({ mode: 'open' });
+
+  // §5a 主站 CSS 变量继承 + CFG.panelCss → CSS 变量注入
+  var _THEME_DEFS = {
+    dark: { '--card': CFG.ui.panelBg, '--card2': _pc('darkPanelBg2','darkPanelBg2Alpha'), '--border': CFG.ui.panelBorder, '--border2': CFG.ui.barBorder,
+            '--shadow': _pc('darkOverlay','darkOverlayAlpha'), '--text': CFG.ui.textColor, '--text-secondary': CFG.ui.textSecondary, '--text-tertiary': CFG.ui.textTertiary,
+            '--accent': CFG.ui.accentColor, '--accent2': CFG.ui.accent2Color, '--warn': CFG.ui.warnColor },
+    light: { '--card': CFG.ui.lightPanelBg, '--card2': CFG.ui.lightBg, '--border': CFG.ui.lightBorder, '--border2': CFG.ui.lightBorder,
+             '--shadow': _pc('lightOverlay','lightOverlayAlpha'), '--text': CFG.ui.lightText, '--text-secondary': CFG.ui.lightTextSecondary, '--text-tertiary': CFG.ui.lightTextTertiary,
+             '--accent': CFG.ui.lightAccent, '--accent2': CFG.ui.lightAccent2, '--warn': CFG.ui.lightWarn }
+  };
+  // mc.mcgg.cc 主站真实 CSS 变量名 → 浮窗内部变量名映射
+  // 主站用 --bg-primary/--accent-primary/--accent-cta/--border-light/--bg-secondary 等
+  // 浮窗内部用 --card/--card2/--accent/--accent2/--warn/--border/--border2/--shadow
+  var _THEME_VAR_SRC = {
+    '--card': '--card',               '--card2': '--bg-secondary',
+    '--border': '--border',           '--border2': '--border-default',
+    '--shadow': '--shadow-md',
+    '--text': '--text',               '--text-secondary': '--text-secondary', '--text-tertiary': '--text-tertiary',
+    '--accent': '--accent-primary',   '--accent2': '--accent-secondary',      '--warn': '--accent-cta'
+  };
+  function _isLight() {
+    try {
+      var bg = getComputedStyle(document.body || document.documentElement).backgroundColor;
+      var m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) return ((+m[1] + +m[2] + +m[3]) / 3) > 128;
+    } catch(e) {}
+    var t = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
+    if (t === 'light') return true;
+    if (t === 'dark') return false;
+    return false;
+  }
+  function _syncThemeVars() {
+    var cs = getComputedStyle(document.documentElement);
+    var defs = _isLight() ? _THEME_DEFS.light : _THEME_DEFS.dark;
+    for (var k in defs) {
+      if (!defs.hasOwnProperty(k)) continue;
+      // 优先读主站真实变量（_THEME_VAR_SRC 映射），无则读同名变量
+      var src = _THEME_VAR_SRC[k] || k;
+      var v = cs.getPropertyValue(src).trim();
+      if (!v) v = cs.getPropertyValue(k).trim();   // 兜底读浮窗同名变量
+      host.style.setProperty(k, v || defs[k]);     // 都没有才用 CFG 默认
+    }
+    // 从 CFG.panelCss 设置面板专用 CSS 变量（覆盖模板中的硬编码 fallback）
+    var P = CFG.panelCss;
+    host.style.setProperty('--aq-dark-bg', _pc('darkBg','darkBgAlpha'));
+    host.style.setProperty('--aq-dark-panel', _pc('darkPanelBg','darkPanelBgAlpha'));
+    host.style.setProperty('--aq-dark-panel2', _pc('darkPanelBg2','darkPanelBg2Alpha'));
+    host.style.setProperty('--aq-dark-overlay', _pc('darkOverlay','darkOverlayAlpha'));
+    host.style.setProperty('--aq-dark-overlay-lt', _pc('darkOverlayLight','darkOverlayLightAlpha'));
+    host.style.setProperty('--aq-dark-overlay-ltr', _pc('darkOverlayLighter','darkOverlayLighterAlpha'));
+    host.style.setProperty('--aq-dark-overlay-sub', _pc('darkOverlaySubtle','darkOverlaySubtleAlpha'));
+    host.style.setProperty('--aq-dark-divider', _pc('darkDivider','darkDividerAlpha'));
+    host.style.setProperty('--aq-light-bg', _pc('lightBg','lightBgAlpha'));
+    host.style.setProperty('--aq-light-overlay', _pc('lightOverlay','lightOverlayAlpha'));
+    host.style.setProperty('--aq-light-overlay2', _pc('lightOverlay2','lightOverlay2Alpha'));
+    host.style.setProperty('--aq-accent-warn', _pc('accentWarn','accentWarnAlpha'));
+    host.style.setProperty('--aq-accent-warn-lt', _pc('accentWarnLight','accentWarnLightAlpha'));
+    host.style.setProperty('--aq-accent-warn-ltr', _pc('accentWarnLighter','accentWarnLighterAlpha'));
+    host.style.setProperty('--aq-accent-blue', _pc('accentBlue','accentBlueAlpha'));
+    host.style.setProperty('--aq-accent-blue-lt', _pc('accentBlueLight','accentBlueLightAlpha'));
+    host.style.setProperty('--aq-accent-green', _pc('accentGreen','accentGreenAlpha'));
+    host.style.setProperty('--aq-accent-green-lt', _pc('accentGreenLight','accentGreenLightAlpha'));
+    host.style.setProperty('--aq-accent-red', _pc('accentRed','accentRedAlpha'));
+    host.style.setProperty('--aq-accent-red-lt', _pc('accentRedLight','accentRedLightAlpha'));
+    host.style.setProperty('--aq-dark-shadow', _pc('darkShadow','darkShadowAlpha'));
+  }
+  _syncThemeVars(); // 初始化继承
+
+  // 辅助：从 CFG.panelCss 生成 rgba 字符串
+  function _pc(key, alphaKey) {
+    var c = CFG.panelCss[key], a = CFG.panelCss[alphaKey];
+    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  }
+  function _pcSolid(key) {
+    var c = CFG.panelCss[key];
+    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  }
+
+  // §5b MutationObserver + Shadow DOM HTML 模板 + CSS
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function() { _syncThemeVars(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  }
 
   shadow.innerHTML = '\
 <style>\
@@ -293,7 +612,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 </div>\
 <div class="panel" id="panel">\
   <div class="phead">\
-    <div class="t">梁文<span class="hl">峰</span> &amp; 梁文<span class="hl">谷</span> 值班表<small id="ver"></small></div>\
+    <div class="t" id="panelTitle">值班表<small id="ver"></small></div>\
     <span class="status" id="status">—</span>\
   </div>\
   <div class="motto" id="motto"></div>\
@@ -309,7 +628,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   <div class="timeline">\
     <div class="tl-title">时段 (北京时间)</div>\
     <div class="tl" id="tl"></div>\
-    <div class="tl-legend"><span><i style="background:var(--warn,#f0883e)"></i>梁文<span class="hl">峰</span> 9-12/14-18</span><span><i style="background:#238636"></i>梁文<span class="hl">谷</span> 半价</span></div>\
+    <div class="tl-legend" id="tlLegend"><span><i style="background:var(--warn,#f0883e)"></i><span id="lgPeak"></span></span><span><i style="background:#238636"></i><span id="lgOff"></span></span></div>\
   </div>\
   <div class="foot">\
     <span class="remind"><span class="switch" id="remindSw"></span>切换变色提醒</span>\
@@ -324,16 +643,43 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   var aqName = $('aqName'), aqPrice = $('aqPrice');
   var pillLabel = $('pillLabel'), pillPrice = $('pillPrice'), pillIcon = $('pillIcon');
   var statusEl = $('status'), verEl = $('ver'), tlEl = $('tl'), mottoEl = $('motto'), toastEl = $('toast');
+  var panelTitle = $('panelTitle'), lgPeak = $('lgPeak'), lgOff = $('lgOff');
   var pCh = $('pCh'), pCm = $('pCm'), pOut = $('pOut');
   var nextEl = $('nextSwitch'), remindSw = $('remindSw');
 
-  var currentModel = 'flash';
+
+  // ═══════════════════════════════════════════════════
+  // §6 DOM 引用 + i18n 初始化
+  // ═══════════════════════════════════════════════════
+  // §6a i18n: 模板文本 → CFG.i18n 动态替换
+
+  var _tlTitle = shadow.querySelector('.tl-title'); if (_tlTitle) _tlTitle.textContent = CFG.i18n.timeLabel;
+  var _remindLabel = shadow.querySelector('.remind'); if (_remindLabel) { var _sw = _remindLabel.querySelector('.switch'); _remindLabel.textContent = ''; if (_sw) _remindLabel.appendChild(_sw); _remindLabel.appendChild(document.createTextNode(CFG.i18n.remindLabel)); }
+  var _aqCloseEl = $('aqClose'); if (_aqCloseEl) _aqCloseEl.title = CFG.i18n.closeLabel;
+  var _closeBtnEl = $('closeBtn'); if (_closeBtnEl) _closeBtnEl.title = CFG.i18n.closeLabel;
+  // 面板表头 i18n
+  var _prows = shadow.querySelectorAll('.prow .k');
+  if (_prows.length >= 3) {
+    _prows[0].textContent = CFG.i18n.inputLabel + ' · ' + CFG.i18n.cacheHit;
+    _prows[1].textContent = CFG.i18n.inputLabel + ' · ' + CFG.i18n.cacheMiss;
+    _prows[2].textContent = CFG.i18n.outputLabel;
+  }
+  var _tags = shadow.querySelectorAll('.prow .tag');
+  for (var _ti = 0; _ti < _tags.length; _ti++) _tags[_ti].textContent = CFG.i18n.unitLabel;
+  // 更新时间线图例颜色
+  var _lgIcons = shadow.querySelectorAll('.tl-legend i');
+  if (_lgIcons.length >= 2) { _lgIcons[0].style.background = CFG.ui.warnColor; _lgIcons[1].style.background = CFG.ui.accent2Color; }
+
+  var currentModel = CFG.defaultModel;
   var remindOn = true;
   try { remindOn = localStorage.getItem('__ds_remind__') !== '0'; } catch (e) {}
 
-  // ---- 调侃文案 ----
-  var PEAK_MOTTOS = ['梁文峰上班，钱包打烊', '人挤人，梁文峰笑纳', '现在调用，都是梁文峰价', '错峰一时爽，一直错峰一直爽', '高峰路上，梁文峰收过路费'];
-  var OFF_MOTTOS = ['梁文谷营业，半价捡漏', '谷底风景好，梁文谷请客', '趁梁文谷在，多囤点 token', '夜猫子福利，梁文谷买单', '低谷抄底，梁文谷陪你'];
+  // ═══════════════════════════════════════════════════
+  // §7 面板功能 — 调侃文案 / Toast / 面板渲染
+  // ═══════════════════════════════════════════════════
+
+  var PEAK_MOTTOS = CFG.peakMottos;
+  var OFF_MOTTOS = CFG.offMottos;
   var ICON_PEAK = '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M2 20 L8 8 L12 14 L16 5 L22 20 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
   var ICON_OFF = '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M2 6 L8 18 L12 11 L16 17 L22 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
   var lastMottoIdx = -1, lastMottoPeak = null, toastTimer = null;
@@ -352,7 +698,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 3000);
   }
 
-  // ---- 像素鱼缸动画（桌面陪伴式 · 主题系统 + 全效果） ----
+  // ═══════════════════════════════════════════════════
+  // §8 鱼缸动画 — 状态变量 + 物理参数
+  // ═══════════════════════════════════════════════════
+
   var AQ_W = 150, AQ_H = 92;
   var aqCtx = aqCanvas.getContext('2d');
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -363,38 +712,32 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   aqCtx.scale(dpr, dpr);
 
   // 主题系统
-  var AQUA_THEMES = {
-    // 鱼配色搭配接口：fishColor(身) / fishFin(鳍) / fishTail(尾) / fishBelly(腹) / fishEye(眼) / fishHighlight(高光)
-    // 未配的场位默认=身色(纯色主体)；窗口可用 window.AQUA_THEMES 注入/覆盖自定义主题
-    'default': { fishColor: null, fishFin: null, fishTail: null, fishBelly: null, fishEye: null, fishHighlight: null, deadColor: null, waterRGB: null, decorations: [] },
-    'winter':  { fishColor: '#dce4ec', fishFin: '#a8c4da', fishTail: '#b8cede', fishBelly: '#c3d5e3', fishEye: '#3a4a5a', fishHighlight: 'rgba(255,255,255,0.4)', deadColor: '#6e7681', waterRGB: '140,180,220', decorations: ['snow'] },
-    'autumn':  { fishColor: '#f0d68a', fishFin: '#b8864a', fishTail: '#a97a3c', fishBelly: '#e4bc6c', fishEye: '#5a4020', fishHighlight: 'rgba(255,255,255,0.3)', deadColor: '#8b7355', waterRGB: '180,140,80', decorations: ['leaves'] },
-    'spring':  { fishColor: '#f6e8ee', fishFin: '#b7d7ee', fishTail: '#cfe4f5', fishBelly: '#f6c9d8', fishEye: '#3a4a5a', fishHighlight: 'rgba(255,255,255,0.4)', deadColor: '#8b8b93', waterRGB: '180,200,240', decorations: ['petals'] }
-  };
+  var AQUA_THEMES = CFG.themes;
   var activeTheme = AQUA_THEMES['default'];
   var decoParticles = []; // 装饰粒子
 
   // 鱼状态（含性格+过渡+悬停反应）
   var fish = {
     x: 40, y: 50, tx: 40, ty: 50, dir: 1, speed: 0.7, tail: 0,
-    dead: false, color: '#e6edf3', belly: null, fin: null, tail: null, stripe: null, highlight: null, eyeColor: '#000', deadColor: '#6e7681',
+    dead: false, color: null, belly: null, fin: null, tail: null, stripe: null, highlight: null, eyeColor: '#000', deadColor: null,
     state: 'swim', stateTimer: 0, mouthPhase: 0, pecPhase: 0,
     flipProgress: 0, dartCd: 0, prevDir: 1, celebrate: 0, eyeOx: 0, eyeOy: 0, eaten: false, flopT: 0, flopDir: 1, flopGap: 120
   };
   var waterNow = 0.5, waterTarget = 0.5, waterRGB = '88,166,255', aridF = 0;
   var lastFishPeak = null, aqRaf = null;
 
-  // ---- 彩蛋系统 ----（开久了偶尔触发：捕食者吃鱼 / 多条同伴鱼 / 鱼跃出水）
+  // ═══════════════════════════════════════════════════
+  // §9 彩蛋系统 — 水族彩蛋 + 干旱彩蛋
   var eggFrame = 0, eggCooldown = 300, windWeedCd = 400;
   var predator = null, extraFish = [], jumping = false, jumpPhase = 0, jumpBaseY = 0;
-  var EGG_COLORS = ['#f0b429', '#5aa9e6', '#f2a6c2', '#9be564', '#c89bf0'];
+  var EGG_COLORS = CFG.effects.eggColors;
 
   function spawnPredator() {
     var fromLeft = Math.random() < 0.5;
     predator = {
       x: fromLeft ? -18 : AQ_W + 18, y: 28 + Math.random() * 42,
       tx: fish.x, ty: fish.y, dir: fromLeft ? 1 : -1,
-      speed: 2.6 + Math.random() * 0.5, color: fromLeft ? '#4a5a6a' : '#6a5a4a',
+      speed: 2.6 + Math.random() * 0.5, color: fromLeft ? CFG.effects.dustParticleColors[0] : CFG.effects.dustParticleColors[1],
       victim: false
     };
   }
@@ -419,7 +762,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.fillRect(-10, -2, 20, 6); ctx.fillRect(-8, -3, 12, 8); ctx.fillRect(-5, -6, 9, 11);
     ctx.fillRect(-13, -2, 3, 3); ctx.fillRect(-13, 0, 3, 3);
     // 张开的大嘴
-    ctx.fillStyle = '#111'; ctx.fillRect(9, -4, 4, 4); ctx.fillRect(9, 0, 4, 4);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(9, -4, 4, 4); ctx.fillRect(9, 0, 4, 4);
     // 尖牙
     ctx.fillStyle = '#fff'; ctx.fillRect(8, -3, 1, 1); ctx.fillRect(8, 2, 1, 1); ctx.fillRect(10, -3, 1, 1); ctx.fillRect(10, 2, 1, 1);
     // 眼
@@ -432,7 +775,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 9, 7); ctx.fillRect(-4, -4, 6, 8);
     ctx.fillRect(-11, -1, 3, 3); ctx.fillRect(-11, 1, 3, 3);
     ctx.fillRect(-1, -6, 3, 2); ctx.fillRect(2, 3, 2, 2);
-    ctx.fillStyle = '#111'; ctx.fillRect(4, -3, 2, 2); ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(4, -3, 2, 2); ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 1, 1);
     ctx.restore();
   }
 
@@ -441,7 +784,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   var scene = { light: 0, current: 0, drip: 0, dust: 0, wind: 0, scorch: 0 };
   var fishFx = { golden: 0, spin: 0 };
   // 峰→谷过场天气（乌云+闪电+雨，无声音）+ 过食翻肚触发
-  var weather = 0, weatherT = 0, lightningFlash = 0, rainDrops = [], feedTimes = [];
+  var weather = 0, weatherT = 0, lightningFlash = 0, rainDrops = [], feedTimes = [], eatenTimes = [];
 
   function spawnFx(type, opts) {
     var f = { type: type, age: 0, life: 600, x: 0, y: 0, vx: 0, vy: 0, dir: 1 };
@@ -451,7 +794,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   function spawnHeart() {
     for (var i = 0; i < 2; i++) spawnFx('heart', {
       x: fish.x + (i ? 7 : -4), y: fish.y - 4, vx: (Math.random() - 0.5) * 0.25, vy: -(0.5 + Math.random() * 0.3),
-      life: 90 + Math.random() * 40, color: i ? '#ff8ab0' : '#ff5c8a', s: 1 + Math.random()
+      life: 90 + Math.random() * 40, color: i ? CFG.effects.heartColors[0] : CFG.effects.heartColors[1], s: 1 + Math.random()
     });
   }
   function spawnBubRain() {
@@ -467,7 +810,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   function spawnShadow() { var l = Math.random() < 0.5; spawnFx('shadow', { x: l ? -36 : AQ_W + 36, y: 18 + Math.random() * 40, vx: l ? 0.8 : -0.8, dir: l ? 1 : -1, life: 700 }); }
   function spawnSquid() { var l = Math.random() < 0.5; spawnFx('squid', { x: l ? -12 : AQ_W + 12, y: 24 + Math.random() * 30, vx: l ? 0.5 : -0.5, dir: l ? 1 : -1, life: 800 }); }
   function spawnRainbow() {
-    var cols = ['#ff5f57', '#ffbd2e', '#28c840', '#45a1ff', '#b45cff', '#ff7ad1'];
+    var cols = CFG.effects.burstColors;
     for (var i = 0; i < 6; i++) bubbles.push({
       x: fish.x + fish.dir * 8, y: fish.y - 2, r: 1.5 + Math.random(), vy: -(0.5 + Math.random() * 0.2),
       wobble: i * 1.1, alpha: 0.9, color: cols[i]
@@ -483,37 +826,37 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
   function drawJelly(ctx, f, t) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.globalAlpha = 0.65;
-    ctx.fillStyle = 'rgba(200,225,255,0.6)'; ctx.fillRect(-5, -5, 10, 4); ctx.fillRect(-7, -3, 14, 3);
-    ctx.fillStyle = 'rgba(200,225,255,0.35)';
+    ctx.fillStyle = 'rgba(' + CFG.creatures.jellyBody.join(',') + ',' + CFG.creatures.jellyBodyAlpha + ')'; ctx.fillRect(-5, -5, 10, 4); ctx.fillRect(-7, -3, 14, 3);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.jellyBody.join(',') + ',' + CFG.creatures.jellyTentacleAlpha + ')';
     for (var i = 0; i < 3; i++) ctx.fillRect(-3 + i * 3, 2 + Math.sin(t * 2 + i) * 1.5, 2, 6);
     ctx.restore();
   }
   function drawCrab(ctx, f, t) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-    ctx.fillStyle = '#d8642a'; ctx.fillRect(-4, -2, 8, 4);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.crabBody.join(',') + ',1)'; ctx.fillRect(-4, -2, 8, 4);
     ctx.fillRect(-5, -4, 2, 3); ctx.fillRect(3, -4, 2, 3);
-    ctx.fillStyle = '#000'; ctx.fillRect(-3, -2, 2, 2); ctx.fillRect(1, -2, 2, 2);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(-3, -2, 2, 2); ctx.fillRect(1, -2, 2, 2);
     ctx.restore();
   }
   function drawStarfish(ctx, f) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-    ctx.fillStyle = '#e89b6a';
+    ctx.fillStyle = 'rgba(' + CFG.creatures.starBody.join(',') + ',1)';
     ctx.fillRect(-1, -3, 2, 2); ctx.fillRect(-3, -1, 2, 2); ctx.fillRect(1, -1, 2, 2);
     ctx.fillRect(-1, 1, 2, 2); ctx.fillRect(-1, -1, 2, 2);
     ctx.restore();
   }
   function drawTurtle(ctx, f, t) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-    ctx.fillStyle = '#4f8f3a'; ctx.fillRect(-4, -4, 8, 6);
-    ctx.fillStyle = '#6fae57'; ctx.fillRect(-2, -3, 4, 4);
-    ctx.fillStyle = '#3a6f2c'; ctx.fillRect(-5, 2, 3, 2); ctx.fillRect(2, 2, 3, 2);
-    ctx.fillStyle = '#b0d888'; ctx.fillRect(4, -3, 3, 4);
-    ctx.fillStyle = '#000'; ctx.fillRect(5, -3, 2, 2);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.turtleShell.join(',') + ',1)'; ctx.fillRect(-4, -4, 8, 6);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.turtleShellLight.join(',') + ',1)'; ctx.fillRect(-2, -3, 4, 4);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.turtleShellDark.join(',') + ',1)'; ctx.fillRect(-5, 2, 3, 2); ctx.fillRect(2, 2, 3, 2);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.turtleBelly.join(',') + ',1)'; ctx.fillRect(4, -3, 3, 4);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(5, -3, 2, 2);
     ctx.restore();
   }
   function drawShadow(ctx, f) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1); ctx.scale(3, 3);
-    ctx.globalAlpha = 0.35; ctx.fillStyle = '#0a0f14';
+    ctx.globalAlpha = 0.35; ctx.fillStyle = 'rgba(' + CFG.creatures.shadowColor.join(',') + ',1)';
     ctx.fillRect(-8, -2, 14, 4); ctx.fillRect(-6, -3, 9, 6);
     ctx.fillRect(-12, -3, 4, 3); ctx.fillRect(-12, 1, 4, 3);
     ctx.fillRect(6, -2, 3, 2);
@@ -521,8 +864,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
   function drawSquid(ctx, f, t) {
     ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-    ctx.fillStyle = '#b46ad8'; ctx.fillRect(-4, -4, 8, 6); ctx.fillRect(4, -3, 3, 4);
-    ctx.fillStyle = 'rgba(180,106,216,0.5)';
+    ctx.fillStyle = 'rgba(' + CFG.creatures.squidBody.join(',') + ',1)'; ctx.fillRect(-4, -4, 8, 6); ctx.fillRect(4, -3, 3, 4);
+    ctx.fillStyle = 'rgba(' + CFG.creatures.squidBody.join(',') + ',' + CFG.creatures.squidTentacleAlpha + ')';
     for (var i = 0; i < 4; i++) ctx.fillRect(-3 + i * 2, 2 + Math.sin(t * 2 + i) * 1.5, 2, 6);
     ctx.restore();
   }
@@ -548,9 +891,37 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   }
 
   // 手动/自动共用的彩蛋触发器：随机抽一个彩蛋执行
+  
+  // ---- 彩蛋注册表（可插拔，通过 CFG.eggs 注入）----
+  var _eggRegistry = [];
+  function registerEgg(type, weight, requiresWater, handler) {
+    _eggRegistry.push({ type: type, weight: weight, requiresWater: requiresWater, handler: handler });
+  }
+  // 初始化：从 CFG.eggs 加载
+  for (var _ei = 0; _ei < CFG.eggs.length; _ei++) {
+    var _e = CFG.eggs[_ei];
+    registerEgg(_e.type, _e.weight || 1, _e.requiresWater !== false, _e.handler);
+  }
+
+  function triggerRegisteredEgg() {
+    if (_eggRegistry.length === 0) return false;
+    var total = 0;
+    for (var i = 0; i < _eggRegistry.length; i++) total += _eggRegistry[i].weight;
+    var r = Math.random() * total, cum = 0;
+    for (var j = 0; j < _eggRegistry.length; j++) {
+      cum += _eggRegistry[j].weight;
+      if (r < cum) {
+        if (_eggRegistry[j].requiresWater && AQ_H * waterNow < CFG.physics.eggWaterMin) return false;
+        _eggRegistry[j].handler();
+        return true;
+      }
+    }
+    return false;
+  }
+
   function triggerEgg() {
     if (aridF > 0.5) { triggerAridEgg(); return; }   // 干旱主题（高峰没水）用干旱彩蛋库
-    if (AQ_H * waterNow < 15) return;                 // 水少于15px：不触发水族彩蛋（彩蛋只在水里出现）
+    if (AQ_H * waterNow < CFG.physics.eggWaterMin) return;                 // 水少于15px：不触发水族彩蛋（彩蛋只在水里出现）
     if (fish.state === 'float') return;               // 过食翻肚期间暂停彩蛋（不受惊吓/吞鱼）
     var r = Math.random();
     if (r < 0.07 && !fish.dead) spawnPredator();                 // 1 大鱼吃鱼
@@ -573,7 +944,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     else if (r < 0.98) scene.dust = 200;                         // 18 尘埃风暴
     else if (!fish.dead) spawnHeart();                           // 兜底
   }
-  // ===== 干旱主题彩蛋库（高峰没水，≥20 种）=====
+  // §9b 干旱彩蛋库（≥20 种沙漠生物/特效）
+
   function triggerAridEgg() {
     var r = Math.random();
     if (r < 0.05) spawnTumbleweed();                     // 1 风滚草
@@ -624,91 +996,91 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     var ty = f.type;
     if (ty === 'weed') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = '#c9a45a'; ctx.fillRect(-3, -3, 6, 6); ctx.fillRect(-2, -4, 4, 2); ctx.fillRect(-2, 2, 4, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.weedBody.join(',') + ',1)'; ctx.fillRect(-3, -3, 6, 6); ctx.fillRect(-2, -4, 4, 2); ctx.fillRect(-2, 2, 4, 2);
       ctx.fillRect(-4, -2, 2, 4); ctx.fillRect(2, -2, 2, 4);
-      ctx.fillStyle = '#8a6f3a'; ctx.fillRect(1 - 1, -1, 2, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.weedCenter.join(',') + ',1)'; ctx.fillRect(1 - 1, -1, 2, 2);
       ctx.restore();
     } else if (ty === 'cactus') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = '#3f7d43'; ctx.fillRect(-1, -11, 3, 11); ctx.fillRect(-4, -8, 3, 5); ctx.fillRect(2, -9, 3, 5);
-      ctx.fillStyle = '#5aa25a'; ctx.fillRect(-1, -13, 3, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.cactusBody.join(',') + ',1)'; ctx.fillRect(-1, -11, 3, 11); ctx.fillRect(-4, -8, 3, 5); ctx.fillRect(2, -9, 3, 5);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.cactusTip.join(',') + ',1)'; ctx.fillRect(-1, -13, 3, 2);
       ctx.restore();
     } else if (ty === 'vulture') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-      ctx.fillStyle = 'rgba(40,30,20,0.85)';
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.vultureBody.join(',') + ',' + CFG.aridFx.vultureAlpha + ')';
       ctx.fillRect(-2, -1, 4, 2); ctx.fillRect(1, -2, 3, 2);
       var flap = Math.sin(t * 6) * 2;
       ctx.fillRect(-6, -3 - flap, 5, 1); ctx.fillRect(3, -3 + flap, 4, 1);
       ctx.restore();
     } else if (ty === 'lightning') {
-      ctx.strokeStyle = 'rgba(255,240,160,' + (f.age < 8 ? 0.9 : 0.4) + ')'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(' + CFG.aridFx.lightningStroke.join(',') + ',' + (f.age < 8 ? CFG.aridFx.lightningYoung : CFG.aridFx.lightningOld) + ')'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(f.x + 4, 0); ctx.lineTo(f.x, 8); ctx.lineTo(f.x + 3, 10); ctx.lineTo(f.x - 2, 20); ctx.stroke();
     } else if (ty === 'sand') {
       for (var s2 = 0; s2 < 22; s2++) {
         var sx = ((t * 1.3 + s2 * 9) % (AQ_W + 24)) - 12, sy = 10 + ((s2 * 31) % (AQ_H - 14));
-        ctx.fillStyle = 'rgba(200,168,110,' + (0.25 + (s2 % 3) * 0.12) + ')';
+        ctx.fillStyle = 'rgba(' + CFG.aridFx.sandColor.join(',') + ',' + (CFG.aridFx.sandAlphaBase + (s2 % 3) * CFG.aridFx.sandAlphaStep) + ')';
         ctx.fillRect(Math.round(sx + Math.sin(t + s2) * 2), Math.round(sy), 3, 2);
       }
     } else if (ty === 'drygrass') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = '#c8b060';
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.drygrassColor.join(',') + ',1)';
       for (var g2 = 0; g2 < 3; g2++) ctx.fillRect(-4 + g2 * 3, -6 - Math.sin(t * 2 + f.ph + g2) * 2, 2, 7);
       ctx.restore();
     } else if (ty === 'crack') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.strokeStyle = 'rgba(90,60,30,0.7)'; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.strokeStyle = 'rgba(' + CFG.aridFx.crackLine.join(',') + ',' + CFG.aridFx.crackAlpha + ')'; ctx.lineWidth = 1; ctx.beginPath();
       var grow = Math.min(1, f.age / 40);
       ctx.moveTo(0, 0); ctx.lineTo(6 * grow, -2); ctx.lineTo(11 * grow, 0); ctx.lineTo(15 * grow, -3); ctx.lineTo(4 * grow, 5); ctx.stroke();
       ctx.restore();
     } else if (ty === 'lizard') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-      ctx.fillStyle = '#9a7f3e'; ctx.fillRect(-4, -2, 8, 3); ctx.fillRect(-7, -1, 3, 2); ctx.fillRect(3, -2, 4, 2);
-      ctx.fillStyle = '#000'; ctx.fillRect(5, -2, 2, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.lizardBody.join(',') + ',1)'; ctx.fillRect(-4, -2, 8, 3); ctx.fillRect(-7, -1, 3, 2); ctx.fillRect(3, -2, 4, 2);
+      ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(5, -2, 2, 2);
       ctx.restore();
     } else if (ty === 'snake') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-      ctx.fillStyle = '#a97a3c';
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.snakeBody.join(',') + ',1)';
       for (var sn = 0; sn < 5; sn++) ctx.fillRect(-8 + sn * 4, Math.sin(t * 3 + sn) * 1.5, 3, 3);
-      ctx.fillStyle = '#000'; ctx.fillRect(8, -2, 2, 2);
+      ctx.fillStyle = 'rgba(' + CFG.creatures.crabEye.join(',') + ',1)'; ctx.fillRect(8, -2, 2, 2);
       ctx.restore();
     } else if (ty === 'deadtree') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = '#5a4630'; ctx.fillRect(-1, -14, 3, 14); ctx.fillRect(-4, -12, 3, 2); ctx.fillRect(-6, -15, 3, 2); ctx.fillRect(2, -13, 3, 2); ctx.fillRect(4, -16, 2, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.deadTreeBody.join(',') + ',1)'; ctx.fillRect(-1, -14, 3, 14); ctx.fillRect(-4, -12, 3, 2); ctx.fillRect(-6, -15, 3, 2); ctx.fillRect(2, -13, 3, 2); ctx.fillRect(4, -16, 2, 2);
       ctx.restore();
     } else if (ty === 'heat') {
       for (var h2 = 0; h2 < 5; h2++) {
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.fillStyle = 'rgba(' + CFG.aridFx.heatColor.join(',') + ',' + CFG.aridFx.heatAlpha + ')';
         ctx.fillRect(Math.round(14 + h2 * 28), Math.round(14 + Math.sin(t * 3 + f.ph + h2 * 1.2) * 4 + h2 * 6), 22, 3);
       }
     } else if (ty === 'mirage') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = 'rgba(120,180,220,0.25)'; ctx.fillRect(0, -6, 34, 3);
-      ctx.fillStyle = 'rgba(120,180,220,0.12)'; ctx.fillRect(2, -8, 30, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.mirageBody.join(',') + ',' + CFG.aridFx.mirageAlpha + ')'; ctx.fillRect(0, -6, 34, 3);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.mirageBody.join(',') + ',' + CFG.aridFx.mirageAlpha2 + ')'; ctx.fillRect(2, -8, 30, 2);
       ctx.restore();
     } else if (ty === 'bone') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y));
-      ctx.fillStyle = '#e0d8c8'; ctx.fillRect(-5, -2, 12, 3); ctx.fillRect(-7, -3, 3, 6); ctx.fillRect(6, -3, 3, 6);
+      ctx.fillStyle = 'rgba(' + CFG.creatures.boneColor.join(',') + ',1)'; ctx.fillRect(-5, -2, 12, 3); ctx.fillRect(-7, -3, 3, 6); ctx.fillRect(6, -3, 3, 6);
       ctx.restore();
     } else if (ty === 'snail') {
       ctx.save(); ctx.translate(Math.round(f.x), Math.round(f.y)); ctx.scale(f.dir, 1);
-      ctx.fillStyle = '#b08a52'; ctx.fillRect(-2, -3, 5, 4); ctx.fillRect(3, -1, 2, 3); ctx.fillRect(1, -2, 4, 3);
-      ctx.fillStyle = '#7a6238'; ctx.fillRect(-1, -3, 3, 2);
+      ctx.fillStyle = 'rgba(' + CFG.creatures.snailBody.join(',') + ',1)'; ctx.fillRect(-2, -3, 5, 4); ctx.fillRect(3, -1, 2, 3); ctx.fillRect(1, -2, 4, 3);
+      ctx.fillStyle = 'rgba(' + CFG.creatures.snailShell.join(',') + ',1)'; ctx.fillRect(-1, -3, 3, 2);
       ctx.restore();
     } else if (ty === 'sun') {
-      ctx.fillStyle = 'rgba(255,230,150,' + (f.age < 12 ? 0.28 : 0.1) + ')'; ctx.fillRect(0, 0, AQ_W, AQ_H);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.sunFlashColor.join(',') + ',' + (f.age < 12 ? CFG.aridFx.sunFlashBright : CFG.aridFx.sunFlashDim) + ')'; ctx.fillRect(0, 0, AQ_W, AQ_H);
     } else if (ty === 'dshadow') {
-      ctx.fillStyle = 'rgba(60,40,20,0.25)'; ctx.fillRect(6, AQ_H - 4, AQ_W - 12, 2);
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.dshadowColor.join(',') + ',' + CFG.aridFx.dshadowAlpha + ')'; ctx.fillRect(6, AQ_H - 4, AQ_W - 12, 2);
     } else if (ty === 'dune') {
-      ctx.fillStyle = 'rgba(150,110,58,' + (0.25 + Math.sin(t * 0.5 + f.ph) * 0.08) + ')';
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.duneColor.join(',') + ',' + (CFG.aridFx.duneAlphaBase + Math.sin(t * 0.5 + f.ph) * CFG.aridFx.duneAlphaAmp) + ')';
       ctx.beginPath(); ctx.moveTo(0, AQ_H - 3);
       for (var dn = 0; dn <= AQ_W; dn += 12) ctx.lineTo(dn, AQ_H - 4 - Math.sin(dn * 0.06 + f.ph) * 2);
       ctx.lineTo(AQ_W, AQ_H); ctx.lineTo(0, AQ_H); ctx.closePath(); ctx.fill();
     } else if (ty === 'bub') {
-      ctx.fillStyle = 'rgba(220,190,120,0.5)';
+      ctx.fillStyle = 'rgba(' + CFG.aridFx.bubColor.join(',') + ',' + CFG.aridFx.bubAlpha + ')';
       ctx.fillRect(Math.round(f.x), Math.round(f.y - f.age * 0.2), 2, 2);
     } else if (ty === 'dust2') {
       for (var d3 = 0; d3 < 16; d3++) {
-        ctx.fillStyle = 'rgba(200,168,110,' + (0.2 + (d3 % 3) * 0.1) + ')';
+        ctx.fillStyle = 'rgba(' + CFG.aridFx.dust2Color.join(',') + ',' + (CFG.aridFx.dust2AlphaBase + (d3 % 3) * CFG.aridFx.dust2AlphaStep) + ')';
         ctx.fillRect(Math.round(4 + (d3 * 11 + t * 18) % (AQ_W - 8)), Math.round(8 + ((d3 * 37) % (AQ_H - 16)) + Math.sin(t + d3) * 2), 2, 2);
       }
     }
@@ -718,10 +1090,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 触发：约12s后活跃，开越久频率越高（v3.3.2 启动砍半+概率调大；点鱼缸5次可手动触发）
     eggFrame++;
     if (eggCooldown > 0) eggCooldown--;
-    if (eggFrame > 750 && eggCooldown <= 0 && !predator) {
-      var p = 0.0025 + Math.min(0.011, (eggFrame - 750) / 30000);
+    if (eggFrame > CFG.physics.eggStartFrame && eggCooldown <= 0 && !predator) {
+      var p = CFG.physics.eggProbBase + Math.min(CFG.physics.eggProbMax, (eggFrame - CFG.physics.eggStartFrame) / CFG.physics.eggProbScale);
       if (Math.random() < p) {
-        eggCooldown = 450 + Math.floor(Math.random() * 900); // ~7~22s 冷却（再缩短）
+        eggCooldown = CFG.physics.eggCooldownMin + Math.floor(Math.random() * CFG.physics.eggCooldownRange); // ~7~22s 冷却（再缩短）
         triggerEgg();
       }
     }
@@ -787,6 +1159,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   aqCanvas.addEventListener('mouseleave', function () { cursorInTank = false; cursorX = -1; cursorY = -1; });
 
   // 水体系统
+  // ═══════════════════════════════════════════════════
+  // §10 水体效果 — 波浪 / 焦散 / 涟漪 / 水草 / 尘埃
+  // ═══════════════════════════════════════════════════
   var waves = [
     { ph: 0, amp: 1.0, freq: 0.16, spd: 14, dy: 0 },
     { ph: 1.7, amp: 1.5, freq: 0.22, spd: 16, dy: 3 },
@@ -798,9 +1173,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   var ripples = [], gravel = [], plants = [];
   // 水草层次：前景深绿大株 / 中景 / 后景淡绿小株，簇状分布 + 稀疏单株穿插
   var PLANT_LVL = [
-    { col: ['#174234', '#1b4d31'], hMin: 16, hMax: 28, stems: [1, 2], sw: 1.0 },   // 前景 深绿 高
-    { col: ['#2a6e46', '#1f5c3a'], hMin: 12, hMax: 20, stems: [1, 2], sw: 0.9 },   // 中景
-    { col: ['#2f7f52', '#3b8a5f'], hMin: 7,  hMax: 13, stems: [1, 1], sw: 0.8 }    // 后景 淡绿 矮
+    { col: CFG.aquatic.seaweedColors[0], hMin: 16, hMax: 28, stems: [1, 2], sw: 1.0 },   // 前景 深绿 高
+    { col: CFG.aquatic.seaweedColors[1], hMin: 12, hMax: 20, stems: [1, 2], sw: 0.9 },   // 中景
+    { col: CFG.aquatic.seaweedColors[2], hMin: 7,  hMax: 13, stems: [1, 1], sw: 0.8 }    // 后景 淡绿 矮
   ];
   var PLANT_GROUPS = [
     { x: 14,  level: 2, n: 2 }, { x: 28,  level: 0, n: 3 }, { x: 48,  level: 1, n: 2 },
@@ -848,7 +1223,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   var bubbles = [], burst = [], food = [];
 
-  // ---- 鱼食系统 ----
+  // ═══════════════════════════════════════════════════
+  // §11 鱼食系统
+  // ═══════════════════════════════════════════════════
+
   function addFood(x, y) {
     feedTimes.push(Date.now());
     var n = 3 + Math.floor(Math.random() * 3);
@@ -887,10 +1265,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     });
   }
 
-  // ---- 绘制函数 ----（主角鱼：明确鱼形+丑萌——流线身体+分叉尾鳍+背鳍+尖头，大眼+腮红）
+  // ═══════════════════════════════════════════════════
+  // §12 绘制函数（鱼/死鱼/气泡/天气/水草/装饰粒子）
+  // ═══════════════════════════════════════════════════
+
   function drawPixelFish(ctx, x, y, dir, f, tailSwing, pecSwing, mouthOpen, eyeOx, eyeOy) {
     // 多部位配色搭配接口：身=color，尾/鳍/腹=可配(默认同身→纯色主体)，眼=eyeColor，高光=highlight
-    var bodyC = f.color, tailC = f.tail || f.color, finC = f.fin || f.color, bellyC = f.belly || null, eyeC = f.eyeColor, hiC = f.highlight || 'rgba(255,255,255,0.28)';
+    var bodyC = f.color, tailC = f.tail || f.color, finC = f.fin || f.color, bellyC = f.belly || null, eyeC = f.eyeColor, hiC = f.highlight || 'rgba(' + CFG.fish.bellyHighlight.join(',') + ',' + CFG.fish.bellyHighlightAlpha + ')';
     ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
     // 尾柄 + 尾鳍（tailC）
     ctx.fillStyle = tailC;
@@ -917,7 +1298,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.fillStyle = hiC;
     ctx.fillRect(-3, -3, 2, 2); ctx.fillRect(1, -2, 2, 2);
     // 腮红（萌）
-    ctx.fillStyle = 'rgba(255,150,160,0.5)';
+    ctx.fillStyle = 'rgba(' + CFG.fish.blushColor.join(',') + ',' + CFG.fish.blushAlpha + ')';
     ctx.fillRect(1, -1, 3, 2);
     // 眼睛（大眼白+黑瞳+高光，头部近嘴，呆萌追踪光标）
     var ex = 6 + Math.round(eyeOx), ey = -4 + Math.round(eyeOy);
@@ -925,7 +1306,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.fillStyle = eyeC; ctx.fillRect(ex + 1, ey + 1, 2, 2);
     ctx.fillStyle = '#fff'; ctx.fillRect(ex + 1, ey, 1, 1);
     // 嘟嘴（头部最前端）
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = 'rgba(' + CFG.fish.mouthColor.join(',') + ',1)';
     if (mouthOpen) ctx.fillRect(11, -2, 2, 2); else ctx.fillRect(11, -1, 2, 1);
     ctx.restore();
   }
@@ -933,7 +1314,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     ctx.save(); ctx.translate(Math.round(x), Math.round(y + (flopY || 0)));
     ctx.scale(1, 1 - flip * 2);
     ctx.globalAlpha = flip < 0.5 ? 0.6 + flip * 0.8 : 1;
-    var c = flopY ? '#ffffff' : color;   // 扑腾时闪白，平时灰
+    var c = flopY ? 'rgba(' + CFG.fish.flopWhite.join(',') + ',1)' : color;   // 扑腾时闪白，平时灰
     ctx.fillStyle = c;
     ctx.fillRect(-8, -2, 12, 5); ctx.fillRect(-6, -3, 10, 7);
     ctx.fillRect(-4, -4, 7, 8); ctx.fillRect(-10, -1, 3, 3);
@@ -945,13 +1326,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   function drawBubble(ctx, x, y, r, alpha, color) {
     var grad = ctx.createRadialGradient(x, y, 0, x, y, r);
     if (color) {
-      grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.25) + ')');
+      grad.addColorStop(0, 'rgba(' + CFG.effects.bubbleColorGrad0.join(',') + ',' + (alpha * CFG.effects.bubbleColorGrad0Alpha) + ')');
       grad.addColorStop(0.7, color);
-      grad.addColorStop(1, 'rgba(255,255,255,0.1)');
+      grad.addColorStop(1, 'rgba(' + CFG.effects.bubbleColorGrad2.join(',') + ',' + CFG.effects.bubbleColorGrad2Alpha + ')');
     } else {
-      grad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.15) + ')');
-      grad.addColorStop(0.7, 'rgba(200,230,255,' + (alpha * 0.4) + ')');
-      grad.addColorStop(1, 'rgba(180,220,255,' + (alpha * 0.1) + ')');
+      grad.addColorStop(0, 'rgba(' + CFG.effects.bubbleGrad0.join(',') + ',' + (alpha * CFG.effects.bubbleGrad0Alpha) + ')');
+      grad.addColorStop(0.7, 'rgba(' + CFG.effects.bubbleGrad1.join(',') + ',' + (alpha * CFG.effects.bubbleGrad1Alpha) + ')');
+      grad.addColorStop(1, 'rgba(' + CFG.effects.bubbleGrad2.join(',') + ',' + (alpha * CFG.effects.bubbleGrad2Alpha) + ')');
     }
     ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
@@ -962,7 +1343,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 乌云（右上一片灰云层）
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(60,68,82,1)';
+    ctx.fillStyle = 'rgba(' + CFG.weather.cloudColor.join(',') + ',1)';
     var cloudBase = 9;
     for (var ci = 0; ci < 4; ci++) {
       var cx = 22 + ci * 34 + Math.sin(t * 0.4 + ci * 1.3) * 2;
@@ -973,9 +1354,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 闪电（间歇，无声音）
     if (weather >= 2 && lightningFlash > 0) {
       ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.4 * lightningFlash / 6) + ')';
+      ctx.fillStyle = 'rgba(' + CFG.weather.flashScreenColor.join(',') + ',' + (CFG.weather.flashScreenAlpha * lightningFlash / 6) + ')';
       ctx.fillRect(0, 0, AQ_W, AQ_H);
-      ctx.strokeStyle = 'rgba(255,244,190,' + (0.9 * lightningFlash / 6) + ')'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(' + CFG.weather.flashBoltColor.join(',') + ',' + (CFG.weather.flashBoltAlpha * lightningFlash / 6) + ')'; ctx.lineWidth = 1.5;
       var lx = 40 + Math.random() * (AQ_W - 80), ly = 12;
       ctx.beginPath(); ctx.moveTo(lx, ly);
       var lsegs = 4;
@@ -984,7 +1365,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     // 雨（下落，打水面）
     if (weather >= 2) {
-      ctx.strokeStyle = 'rgba(190,215,245,0.6)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(' + CFG.weather.rainColor.join(',') + ',' + CFG.weather.rainAlpha + ')'; ctx.lineWidth = 1;
       for (var rd = 0; rd < rainDrops.length; rd++) {
         var rp = rainDrops[rd]; rp.y += rp.vy;
         if (rp.y > waterTop) { rp.y = 10; rp.x = Math.random() * AQ_W; }
@@ -1014,11 +1395,11 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       for (var seg = 0; seg < len; seg += 3) {
         if (py - 3 < waterTop + 3) break;   // 只在水下生长
         var sway = Math.sin(t * 0.5 + plant.ph + seg * 0.1 + s) * 1.8 * (plant.sw || 1) * surge * (1 - ar * 0.7);
-        ctx.fillStyle = (seg % 4 < 2) ? mixHex(plant.col, '#c8a95c', ar) : mixHex('#143629', '#8a6f3a', ar);
+        ctx.fillStyle = (seg % 4 < 2) ? mixHex(plant.col, CFG.aquatic.seaweedTipColor, ar) : mixHex(CFG.aquatic.seaweedDarkColor, CFG.aquatic.seaweedBodyColor, ar);
         ctx.fillRect(Math.round(bx + sway), py, 3, 3);
         py -= 2;
       }
-      ctx.fillStyle = mixHex(plant.col, '#c8a95c', ar);
+      ctx.fillStyle = mixHex(plant.col, CFG.aquatic.seaweedTipColor, ar);
       ctx.fillRect(Math.round(bx + Math.sin(t * 0.5 + plant.ph + s) * 1.8 * (plant.sw || 1) * surge * (1 - ar * 0.7)) - 1, py, 4, 2); // 顶叶
     }
     ctx.globalAlpha = 1;
@@ -1026,23 +1407,26 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
   // 装饰粒子绘制器
   function drawDecoSnow(ctx, p) {
-    ctx.fillStyle = 'rgba(255,255,255,' + p.alpha + ')';
+    ctx.fillStyle = 'rgba(' + CFG.effects.bubbleGrad0.join(',') + ',' + p.alpha + ')';
     ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
   }
   function drawDecoLeaf(ctx, p) {
     ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y));
     ctx.rotate(p.rot || 0);
-    ctx.fillStyle = p.alpha > 0.3 ? 'rgba(200,120,40,' + p.alpha + ')' : 'rgba(160,100,30,' + p.alpha + ')';
+    ctx.fillStyle = p.alpha > 0.3 ? 'rgba(' + CFG.effects.foodColor.join(',') + ',' + p.alpha + ')' : 'rgba(' + CFG.effects.foodColorDark.join(',') + ',' + p.alpha + ')';
     ctx.fillRect(-2, -1, 4, 2); ctx.fillRect(-1, -2, 2, 4);
     ctx.restore();
   }
   function drawDecoPetal(ctx, p) {
-    ctx.fillStyle = 'rgba(255,180,200,' + p.alpha + ')';
+    ctx.fillStyle = 'rgba(' + CFG.effects.heartColor.join(',') + ',' + p.alpha + ')';
     ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
     ctx.fillRect(Math.round(p.x) + 1, Math.round(p.y) - 1, 1, 1);
   }
 
-  // ---- 主动画循环 ----
+  // ═══════════════════════════════════════════════════
+  // §13 主动画循环 aqTick
+  // ═══════════════════════════════════════════════════
+
   function aqTick() {
     if (document.visibilityState === 'hidden') { aqRaf = requestAnimationFrame(aqTick); return; }
     var t = Date.now() / 500;
@@ -1055,16 +1439,16 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
     // === 谷→峰过场：鱼随水干逐渐旱死（水位驱动，非瞬间翻肚）===
     if (!fish.dead && !fish.eaten && fish.state !== 'float') {
-      if (waterNow < 0.08) {
+      if (waterNow < CFG.physics.deadLevel) {
         // 水干透→走 dying 动画（翻白肚下沉）→90帧后 dead
         if (fish.state !== 'dying') { fish.state = 'dying'; fish.stateTimer = 0; }
-      } else if (waterNow < 0.15) {
+      } else if (waterNow < CFG.physics.struggleLevel) {
         // 水很少→挣扎（游速紊乱）
         if (fish.state === 'swim' || fish.state === 'idle' || fish.state === 'seekFood' || fish.state === 'struggle') fish.state = 'struggle';
       }
     }
 
-    if (!fish.dead && fish.state !== 'reviving' && !fish.eaten) {
+    if (!fish.dead && fish.state !== 'reviving' && fish.state !== 'float' && !fish.eaten) {
       // 鱼眼追踪光标（瞳孔偏向光标方向）
       if (cursorInTank) {
         fish.eyeOx = Math.max(-1, Math.min(1, (cursorX - fish.x) / 30));
@@ -1100,7 +1484,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         fish.x += (Math.random() - 0.5) * 0.3;
         fish.x = Math.max(14, Math.min(AQ_W - 14, fish.x));
         if (fish.stateTimer % 34 === 0) spawnMouthBubbles(1); // 打嗝
-        if (fish.stateTimer >= 720) {
+        if (fish.stateTimer >= CFG.physics.overflowDuration) {
           fish.state = 'swim'; fish.stateTimer = 0; fish.flipProgress = 0;
           fish.tx = fish.x; fish.ty = Math.max(waterTop + 14, 16);
           fish.celebrate = 40; addRipple(fish.x, waterTop + 4);
@@ -1115,6 +1499,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
             fish.dir = fdx > 0 ? 1 : -1;
           } else {
             removeFood(foodTarget); // 吃掉
+            eatenTimes.push(Date.now());   // 记录吃掉的鱼食（过食计数用）
             fish.mouthPhase = 3; fish.pecPhase = 3;
             spawnMouthBubbles(1);
             fish.celebrate = Math.max(fish.celebrate, 6);
@@ -1202,7 +1587,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       fish.x = Math.max(12, Math.min(AQ_W - 12, fish.x));
     }
     if (!fish.dead && fish.state === 'swim' && fish.celebrate <= 0) {
-      fish.speed = 0.35 + waterNow * 0.7;
+      fish.speed = CFG.physics.fishSpeedBase + waterNow * CFG.physics.fishSpeedScale;
     }
 
     // === 1.5 死鱼偶尔蹦跶（回光返照，高峰没水时更生动）===
@@ -1212,7 +1597,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
         if (fish.flopGap > 0) fish.flopGap--;
         if (fish.flopGap <= 0) {   // 3~10s 随机扑腾一次
           fish.flopT = 22; fish.flopDir = Math.random() < 0.5 ? 1 : -1;
-          fish.flopGap = 180 + Math.floor(Math.random() * 421);  // 180~600帧 = 3~10s
+          fish.flopGap = CFG.physics.flopMin + Math.floor(Math.random() * CFG.physics.flopRange);  // 180~600帧 = 3~10s
         }
       }
     }
@@ -1251,12 +1636,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       if (bb.y < 0 || bb.alpha <= 0) burst.splice(bj, 1);
     }
 
-    // === 2b. 鱼食（下沉 + 消融） ===
-    var foodFloor = AQ_H - 10; // 停在鱼能游到的位置（鱼 clamp 到 AQ_H-8，留 2px 余量够到）
+    // === 2b. 鱼食（下沉 + 落到缸底消失） ===
+    var foodFloor = AQ_H - 10; // 鱼能游到的最低位置（鱼 clamp 到 AQ_H-8，留 2px 余量够到）
     for (var fi = food.length - 1; fi >= 0; fi--) {
       var fd = food[fi];
       fd.age++; fd.y += fd.vy; fd.x += Math.sin(t * 2 + fd.wobble) * 0.15;
-      if (fd.y > foodFloor) { fd.y = foodFloor; fd.vy = 0; }
+      if (fd.y > foodFloor) { food.splice(fi, 1); continue; }   // 落到缸底即消失
       if (fd.age > 450) food.splice(fi, 1); // ~7.5秒未吃自动消融，避免残留
     }
 
@@ -1277,7 +1662,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
 
     // === 5. 装饰粒子（主题） ===
-    var decoType = activeTheme.decorations.length > 0 ? activeTheme.decorations[0] : null;
+    var decoType = (activeTheme.decorations && activeTheme.decorations.length > 0) ? activeTheme.decorations[0] : null;
     if (decoType && waterNow > 0.1) {
       if (decoParticles.length < 18 && Math.random() < 0.06) {
         var np = { x: Math.random() * AQ_W, y: -4, vx: 0, vy: 0, alpha: 0.6 + Math.random() * 0.3, rot: 0, type: decoType };
@@ -1296,13 +1681,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     } else { decoParticles = []; }
 
     // === 6. 水位缓动 ===
-    waterNow += (waterTarget - waterNow) * 0.04;
+    waterNow += (waterTarget - waterNow) * CFG.physics.waterDamp;
     // 干旱度：水干→干旱，随水位平滑过渡（切换不生硬）
-    aridF += ((waterNow < 0.08 ? 1 : 0) - aridF) * 0.045;
+    aridF += ((waterNow < CFG.physics.aridThreshold ? 1 : 0) - aridF) * CFG.physics.aridDamp;
     if (aridF < 0.001) aridF = 0; if (aridF > 0.999) aridF = 1;
 
     // === 峰→谷过场：水涨回鱼复活（水位驱动）===
-    if (fish.dead && waterNow > 0.25) {
+    if (fish.dead && waterNow > CFG.physics.reviveLevel) {
       fish.dead = false; fish.state = 'reviving'; fish.stateTimer = 0; fish.flipProgress = 1;
       burstBubbles();
     }
@@ -1321,11 +1706,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       }
     }
     if (lightningFlash > 0) lightningFlash--;
-    // === 过食翻肚：近8s投喂≥4次且有足够水 → 鱼翻肚漂水面 ===
-    while (feedTimes.length && Date.now() - feedTimes[0] > 8000) feedTimes.shift();
-    if (feedTimes.length >= 4 && waterNow > 0.3 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving' && fish.state !== 'struggle') {
-      feedTimes.length = 0;
+    // === 过食翻肚：4秒内吃掉≥50粒鱼食且有足够水 → 鱼翻肚漂水面 ===
+    while (eatenTimes.length && Date.now() - eatenTimes[0] > CFG.physics.overflowWindow) eatenTimes.shift();
+    if (eatenTimes.length >= CFG.physics.overflowFeedCount && waterNow > 0.3 && !fish.dead && fish.state !== 'float' && fish.state !== 'dying' && fish.state !== 'reviving' && fish.state !== 'struggle') {
+      eatenTimes.length = 0;
       food.length = 0;                        // 吃掉太多，清空缸里剩余
+      feedTimes.length = 0;
       fish.state = 'float'; fish.stateTimer = 0; fish.flipProgress = 0;
       addRipple(fish.x, Math.max(waterTop + 4, 14));
     }
@@ -1345,77 +1731,80 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // === 干旱背景：沙漠风景（水位低时随 aridF 平滑浮现）===
     if (aridF > 0.05) {
       var ar = aridF;
-      // === 月亮计时（峰段进度：左侧升起→弧线→右侧落下，对应峰段时间）===
-      var _pMoon = nowParts();
-      var moonProg = -1;
+      // === 太阳计时（峰段进度：左侧升起→弧线→右侧落下，对应峰段时间）===
+      var _pSun = nowParts();
+      var sunProg = -1;
       for (var mpi = 0; mpi < PEAK_SEGMENTS.length; mpi++) {
         var mseg = PEAK_SEGMENTS[mpi];
         var mS = mseg[0] * 60, mE = mseg[1] * 60;
-        var mNow = _pMoon.h * 60 + _pMoon.m;
-        if (mNow >= mS && mNow < mE) { moonProg = (mNow - mS) / (mE - mS); break; }
+        var mNow = _pSun.h * 60 + _pSun.m;
+        if (mNow >= mS && mNow < mE) { sunProg = (mNow - mS) / (mE - mS); break; }
       }
-      if (moonProg >= 0 && ar > 0.3) {
-        var moonX = 10 + moonProg * (AQ_W - 20);
-        var moonY = 22 - Math.sin(moonProg * Math.PI) * 14;   // 弧线：左侧低(y=22)→顶(y=8)→右侧低
-        aqCtx.fillStyle = 'rgba(255,248,200,' + (0.7 * ar) + ')';
-        aqCtx.beginPath(); aqCtx.arc(moonX, moonY, 4.5, 0, Math.PI * 2); aqCtx.fill();
-        aqCtx.fillStyle = 'rgba(255,248,200,' + (0.18 * ar) + ')';
-        aqCtx.beginPath(); aqCtx.arc(moonX, moonY, 10, 0, Math.PI * 2); aqCtx.fill();
+      if (sunProg >= 0 && ar > 0.3) {
+        var sunX = 10 + sunProg * (AQ_W - 20);
+        var sunY = 22 - Math.sin(sunProg * Math.PI) * 14;   // 弧线：左侧低(y=22)→顶(y=8)→右侧低
+        // 外层光晕（最柔）
+        aqCtx.fillStyle = 'rgba(' + CFG.desert.sunOuter.join(',') + ',' + (CFG.desert.sunOuterAlpha * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(sunX, sunY, CFG.desert.sunOuterRadius, 0, Math.PI * 2); aqCtx.fill();
+        // 中层光晕
+        aqCtx.fillStyle = 'rgba(' + CFG.desert.sunMid.join(',') + ',' + (CFG.desert.sunMidAlpha * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(sunX, sunY, CFG.desert.sunMidRadius, 0, Math.PI * 2); aqCtx.fill();
+        // 光晕
+        aqCtx.fillStyle = 'rgba(' + CFG.desert.sunHalo.join(',') + ',' + (CFG.desert.sunHaloAlpha * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(sunX, sunY, CFG.desert.sunHaloRadius, 0, Math.PI * 2); aqCtx.fill();
+        // 太阳核心（最后画，在最上层）
+        aqCtx.fillStyle = 'rgba(' + CFG.desert.sunColor.join(',') + ',' + (CFG.desert.sunAlpha * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(sunX, sunY, CFG.desert.sunRadius, 0, Math.PI * 2); aqCtx.fill();
       }
-      // 天空（暖黄渐变）
+      // 天空（暖黄渐变 — 更明亮的沙漠天空）
       var sky = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
-      sky.addColorStop(0, 'rgba(230,192,122,' + (0.32 * ar) + ')');
-      sky.addColorStop(0.62, 'rgba(214,160,92,' + (0.28 * ar) + ')');
-      sky.addColorStop(1, 'rgba(180,120,64,' + (0.4 * ar) + ')');
+      sky.addColorStop(0, 'rgba(' + CFG.desert.skyTop.join(',') + ',' + (CFG.desert.skyAlpha[0] * ar) + ')');
+      sky.addColorStop(0.55, 'rgba(' + CFG.desert.skyMid.join(',') + ',' + (CFG.desert.skyAlpha[1] * ar) + ')');
+      sky.addColorStop(1, 'rgba(' + CFG.desert.skyBot.join(',') + ',' + (CFG.desert.skyAlpha[2] * ar) + ')');
       aqCtx.fillStyle = sky; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
-      // 烈日（右上一轮）
-      aqCtx.fillStyle = 'rgba(255,232,150,' + (0.55 * ar) + ')';
-      aqCtx.beginPath(); aqCtx.arc(AQ_W - 24, 15, 7, 0, Math.PI * 2); aqCtx.fill();
-      aqCtx.fillStyle = 'rgba(255,232,150,' + (0.22 * ar) + ')';
-      aqCtx.beginPath(); aqCtx.arc(AQ_W - 24, 15, 12, 0, Math.PI * 2); aqCtx.fill();
       // 远沙丘（起伏轮廓，微动）
-      aqCtx.fillStyle = 'rgba(196,144,74,' + (0.4 * ar) + ')';
+      aqCtx.fillStyle = 'rgba(' + CFG.desert.duneColor.join(',') + ',' + (CFG.desert.duneAlpha * ar) + ')';
       aqCtx.beginPath(); aqCtx.moveTo(0, AQ_H - 24);
       for (var dq = 0; dq <= AQ_W; dq += 10) aqCtx.lineTo(dq, AQ_H - 24 - Math.sin(dq * 0.08 + t * 0.12) * 3);
       aqCtx.lineTo(AQ_W, AQ_H); aqCtx.lineTo(0, AQ_H); aqCtx.closePath(); aqCtx.fill();
       // 近处沙地
       var sGrad = aqCtx.createLinearGradient(0, AQ_H - 14, 0, AQ_H);
-      sGrad.addColorStop(0, 'rgba(164,122,64,' + (0.5 * ar) + ')');
-      sGrad.addColorStop(1, 'rgba(132,94,48,' + (0.6 * ar) + ')');
+      sGrad.addColorStop(0, 'rgba(' + CFG.desert.sandColor[0].slice(0,3).join(',') + ',' + (CFG.desert.sandColor[0][3] * ar) + ')');
+      sGrad.addColorStop(1, 'rgba(' + CFG.desert.sandColor[1].slice(0,3).join(',') + ',' + (CFG.desert.sandColor[1][3] * ar) + ')');
       aqCtx.fillStyle = sGrad; aqCtx.fillRect(0, AQ_H - 12, AQ_W, 12);
       // 沙波纹
-      aqCtx.strokeStyle = 'rgba(150,108,58,' + (0.4 * ar) + ')'; aqCtx.lineWidth = 1;
+      aqCtx.strokeStyle = 'rgba(' + CFG.desert.waveColor.join(',') + ',' + (CFG.desert.waveAlpha * ar) + ')'; aqCtx.lineWidth = 1;
       for (var sm = 0; sm < 3; sm++) {
         aqCtx.beginPath();
         for (var sx2 = 0; sx2 <= AQ_W; sx2 += 6) { var sy2 = AQ_H - 4 + sm * 2 + Math.sin(sx2 * 0.16 + sm + t * 0.3) * 1.2; if (sx2 === 0) aqCtx.moveTo(sx2, sy2); else aqCtx.lineTo(sx2, sy2); }
         aqCtx.stroke();
       }
       // 仙人掌剪影（左）
-      aqCtx.fillStyle = 'rgba(58,88,48,' + (0.5 * ar) + ')';
+      aqCtx.fillStyle = 'rgba(' + CFG.desert.cactusColor.join(',') + ',' + (CFG.desert.cactusAlpha * ar) + ')';
       aqCtx.fillRect(16, AQ_H - 16, 3, 10); aqCtx.fillRect(10, AQ_H - 14, 3, 4); aqCtx.fillRect(21, AQ_H - 15, 3, 5);
       // 枯树剪影（右）
-      aqCtx.fillStyle = 'rgba(92,66,40,' + (0.5 * ar) + ')';
+      aqCtx.fillStyle = 'rgba(' + CFG.desert.deadtreeColor.join(',') + ',' + (CFG.desert.deadtreeAlpha * ar) + ')';
       aqCtx.fillRect(AQ_W - 30, AQ_H - 16, 2, 10); aqCtx.fillRect(AQ_W - 33, AQ_H - 17, 2, 2); aqCtx.fillRect(AQ_W - 27, AQ_H - 18, 2, 2); aqCtx.fillRect(AQ_W - 26, AQ_H - 8, 2, 3);
       // 龟裂
-      aqCtx.strokeStyle = 'rgba(76,52,26,' + (0.5 * ar) + ')'; aqCtx.lineWidth = 1; aqCtx.beginPath();
+      aqCtx.strokeStyle = 'rgba(' + CFG.desert.crackColor.join(',') + ',' + (CFG.desert.crackAlpha * ar) + ')'; aqCtx.lineWidth = 1; aqCtx.beginPath();
       for (var ck = 0; ck < 5; ck++) {
         var cx0 = 10 + ck * 28 + Math.sin(t * 0.3 + ck) * 3;
         aqCtx.moveTo(cx0, AQ_H - 4); aqCtx.lineTo(cx0 + 5, AQ_H - 10); aqCtx.lineTo(cx0 + 11, AQ_H - 3); aqCtx.lineTo(cx0 + 17, AQ_H - 10);
       }
       aqCtx.stroke();
-      // 热浪光斑
-      aqCtx.fillStyle = 'rgba(255,214,140,' + (0.1 * ar) + ')';
+      // 热浪光斑（极淡，避免干扰月亮计时）
+      aqCtx.fillStyle = 'rgba(' + CFG.desert.sunColor.join(',') + ',' + (CFG.desert.heatAlpha * ar) + ')';
       aqCtx.fillRect(Math.round(18 + Math.sin(t * 0.5) * 7), 9, 32, 4);
       aqCtx.fillRect(Math.round(78 + Math.cos(t * 0.4) * 9), 9, 26, 3);
       // 风沙线条（scene.wind）
       if (scene.wind > 0) {
         for (var ws = 0; ws < 8; ws++) {
-          aqCtx.fillStyle = 'rgba(210,175,115,0.4)';
+          aqCtx.fillStyle = 'rgba(' + CFG.effects.windLineColor.join(',') + ',' + CFG.effects.windLineAlpha + ')';
           aqCtx.fillRect(Math.round(((t * 2 + ws * 22) % (AQ_W + 30)) - 15), Math.round(12 + ((ws * 23) % (AQ_H - 22))), 6, 1);
         }
       }
       // 灼热滤镜（scene.scorch）
-      if (scene.scorch > 0) { aqCtx.fillStyle = 'rgba(255,180,80,' + (0.06 * scene.scorch / 70) + ')'; aqCtx.fillRect(0, 0, AQ_W, AQ_H); }
+      if (scene.scorch > 0) { aqCtx.fillStyle = 'rgba(255,180,80,' + (CFG.desert.scorchAlpha * scene.scorch / 70) + ')'; aqCtx.fillRect(0, 0, AQ_W, AQ_H); }
     }
 
     // === 峰→谷过场：乌云+闪电+雨（画在水体之上）===
@@ -1426,12 +1815,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       // 光束（对角，非常淡）
       var beamX = 20 + Math.sin(t * 0.15) * 10;
       var beamAlpha = 0.025 + Math.sin(t * 0.4) * 0.008 + (scene.light > 0 ? 0.055 : 0);
-      aqCtx.fillStyle = 'rgba(255,255,255,' + beamAlpha + ')';
+      aqCtx.fillStyle = 'rgba(' + CFG.effects.lightBeamColor.join(',') + ',' + beamAlpha + ')';
       aqCtx.beginPath();
       aqCtx.moveTo(beamX, AQ_H - wh); aqCtx.lineTo(beamX + 8, AQ_H - wh);
       aqCtx.lineTo(beamX + 35, AQ_H); aqCtx.lineTo(beamX + 25, AQ_H);
       aqCtx.closePath(); aqCtx.fill();
-      aqCtx.fillStyle = 'rgba(255,255,255,' + (beamAlpha * 0.7) + ')';
+      aqCtx.fillStyle = 'rgba(' + CFG.effects.lightBeamColor.join(',') + ',' + (beamAlpha * 0.7) + ')';
       aqCtx.beginPath();
       aqCtx.moveTo(beamX + 60, AQ_H - wh); aqCtx.lineTo(beamX + 66, AQ_H - wh);
       aqCtx.lineTo(beamX + 85, AQ_H); aqCtx.lineTo(beamX + 77, AQ_H);
@@ -1446,7 +1835,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       // caustics
       for (var ci = 0; ci < caustics.length; ci++) {
         var cs = caustics[ci];
-        aqCtx.fillStyle = 'rgba(255,255,255,0.06)';
+        aqCtx.fillStyle = 'rgba(' + CFG.effects.causticColor.join(',') + ',' + CFG.effects.causticAlpha + ')';
         aqCtx.beginPath();
         aqCtx.ellipse(cs.x + Math.sin(t * cs.spd + cs.ph) * 15, AQ_H - 4 + Math.cos(t * cs.spd * 0.7 + cs.ph) * 2, 6, 3, Math.sin(t * 0.3 + cs.ph) * 0.5, 0, Math.PI * 2);
         aqCtx.fill();
@@ -1466,7 +1855,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
       // 流动光带
       var shift = (t * 26) % (AQ_W + 80) - 40;
-      aqCtx.fillStyle = 'rgba(255,255,255,0.04)';
+      aqCtx.fillStyle = 'rgba(' + CFG.effects.flowHighlightColor.join(',') + ',' + CFG.effects.flowHighlightAlpha + ')';
       aqCtx.beginPath();
       aqCtx.moveTo(shift - 14, AQ_H - wh); aqCtx.lineTo(shift + 10, AQ_H - wh);
       aqCtx.lineTo(shift + 30, AQ_H); aqCtx.lineTo(shift + 6, AQ_H);
@@ -1474,7 +1863,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
       // 高光点
       for (var si = 0; si < 3; si++) {
-        aqCtx.fillStyle = 'rgba(255,255,255,0.10)';
+        aqCtx.fillStyle = 'rgba(' + CFG.effects.surfaceHighlightColor.join(',') + ',' + CFG.effects.surfaceHighlightAlpha + ')';
         aqCtx.fillRect(Math.round(((t * 22 + si * 55) % (AQ_W + 20)) - 10), Math.round(AQ_H - wh + 2 + Math.sin(t * 2 + si * 2.1) * 2), 3, 2);
       }
 
@@ -1488,7 +1877,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       // 涟漪
       for (var rj = 0; rj < ripples.length; rj++) {
         var rr = ripples[rj];
-        aqCtx.strokeStyle = 'rgba(255,255,255,' + Math.max(0, rr.alpha) + ')';
+        aqCtx.strokeStyle = 'rgba(' + CFG.effects.rippleColor.join(',') + ',' + Math.max(0, rr.alpha) + ')';
         aqCtx.lineWidth = 1; aqCtx.beginPath(); aqCtx.arc(rr.x, rr.y, rr.r, 0, Math.PI * 2); aqCtx.stroke();
       }
 
@@ -1504,7 +1893,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
           dp2.x += dp2.vx * 2 + Math.sin(t * 0.8 + dd) * 0.25;
           dp2.y += dp2.vy * 2 + Math.cos(t * 0.6 + dd * 1.3) * 0.2;
         }
-        aqCtx.fillStyle = 'rgba(255,255,255,' + Math.min(0.7, dp2.alpha + (scene.dust > 0 ? 0.25 : 0)) + ')';
+        aqCtx.fillStyle = 'rgba(' + CFG.effects.dustColor.join(',') + ',' + Math.min(0.7, dp2.alpha + (scene.dust > 0 ? 0.25 : 0)) + ')';
         aqCtx.fillRect(Math.round(dp2.x), Math.round(dp2.y), dp2.sz, dp2.sz > 1 ? 1 : dp2.sz);
       }
     }
@@ -1524,7 +1913,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 鱼食
     for (var fo = 0; fo < food.length; fo++) {
       var fdp = food[fo];
-      aqCtx.fillStyle = 'rgba(230,150,80,0.85)';
+      aqCtx.fillStyle = 'rgba(' + CFG.desert.sunColor.join(',') + ',0.85)';
       aqCtx.fillRect(Math.round(fdp.x), Math.round(fdp.y), 2, 2);
     }
 
@@ -1541,11 +1930,11 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
     // 鱼（应用彩蛋 flags：金色 / 转圈）
     var drawColor = fish.color, drawDir = fish.dir;
-    if (fishFx.golden > 0) drawColor = '#f6c945';
+    if (fishFx.golden > 0) drawColor = CFG.effects.goldenColor;
     if (fishFx.spin > 0) drawDir = (Math.floor(t * 6) % 2 === 0) ? fish.dir : -fish.dir;
     if (fish.dead || fish.state === 'dying') {
       var flopY = fish.flopT > 0 ? Math.round(fish.flopDir * Math.sin((22 - fish.flopT) * 1.3) * 3) : 0;
-      drawDeadFish(aqCtx, fish.x, AQ_H - 8, aridF > 0.3 ? '#7d7d7d' : fish.deadColor, fish.flipProgress, flopY);   // 高峰死鱼灰色，扑腾时内部变白
+      drawDeadFish(aqCtx, fish.x, AQ_H - 8, aridF > 0.3 ? CFG.desert.fishDeadColor : fish.deadColor, fish.flipProgress, flopY);   // 高峰死鱼灰色，扑腾时内部变白
     } else if (fish.state === 'reviving') {
       drawDeadFish(aqCtx, fish.x, AQ_H - 8 - fish.flipProgress * 20, fish.deadColor, fish.flipProgress);
     } else if (fish.state === 'float') {
@@ -1565,13 +1954,13 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
 
     // 玻璃效果
-    aqCtx.fillStyle = 'rgba(255,255,255,0.08)';
+    aqCtx.fillStyle = 'rgba(' + CFG.effects.lightBeamColor.join(',') + ',0.08)';
     aqCtx.fillRect(2, 2, 8, 1); aqCtx.fillRect(2, 2, 1, 6);
     aqCtx.fillRect(AQ_W - 10, AQ_H - 3, 8, 1); aqCtx.fillRect(AQ_W - 3, AQ_H - 9, 1, 7);
-    aqCtx.fillStyle = 'rgba(255,255,255,0.07)';
+    aqCtx.fillStyle = 'rgba(' + CFG.effects.lightBeamColor.join(',') + ',0.07)';
     for (var dgi = 0; dgi < glassDrops.length; dgi++) aqCtx.fillRect(glassDrops[dgi].x, glassDrops[dgi].y, 2, 2);
     if (scene.drip > 0) {
-      aqCtx.fillStyle = 'rgba(255,255,255,0.18)';
+      aqCtx.fillStyle = 'rgba(' + CFG.effects.lightBeamColor.join(',') + ',0.18)';
       for (var dri = 0; dri < 4; dri++) {
         var dxp = 12 + dri * 34;
         var dyp = (t * 1.2 + dri * 11) % AQ_H;
@@ -1579,18 +1968,21 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       }
     }
     var vg1 = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
-    vg1.addColorStop(0, 'rgba(0,0,0,0.06)'); vg1.addColorStop(0.08, 'rgba(0,0,0,0)');
-    vg1.addColorStop(0.92, 'rgba(0,0,0,0)'); vg1.addColorStop(1, 'rgba(0,0,0,0.06)');
+    vg1.addColorStop(0, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',' + CFG.effects.vignetteAlpha + ')'); vg1.addColorStop(0.08, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',0)');
+    vg1.addColorStop(0.92, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',0)'); vg1.addColorStop(1, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',' + CFG.effects.vignetteAlpha + ')');
     aqCtx.fillStyle = vg1; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
     var vg2 = aqCtx.createLinearGradient(0, 0, AQ_W, 0);
-    vg2.addColorStop(0, 'rgba(0,0,0,0.05)'); vg2.addColorStop(0.06, 'rgba(0,0,0,0)');
-    vg2.addColorStop(0.94, 'rgba(0,0,0,0)'); vg2.addColorStop(1, 'rgba(0,0,0,0.05)');
+    vg2.addColorStop(0, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',' + (CFG.effects.vignetteAlpha * 0.83) + ')'); vg2.addColorStop(0.06, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',0)');
+    vg2.addColorStop(0.94, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',0)'); vg2.addColorStop(1, 'rgba(' + CFG.effects.vignetteColor.join(',') + ',' + (CFG.effects.vignetteAlpha * 0.83) + ')');
     aqCtx.fillStyle = vg2; aqCtx.fillRect(0, 0, AQ_W, AQ_H);
 
     aqRaf = requestAnimationFrame(aqTick);
   }
 
-  // ---- 拖动 ----
+  // ═══════════════════════════════════════════════════
+  // §14 拖动
+  // ═══════════════════════════════════════════════════
+
   var dragging = false, dragMoved = false, wasDragged = false;
   var dragOffX = 0, dragOffY = 0, dragStartX = 0, dragStartY = 0;
   wrap.addEventListener('mousedown', function (e) {
@@ -1642,7 +2034,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     }
   });
 
-  // ---- 状态 ----
+  // ═══════════════════════════════════════════════════
+  // §15 状态渲染（价格/倒计时/UI 更新）
+  // ═══════════════════════════════════════════════════
+
   var lastPeak = null, lastBlink = 0;
 
   function render() {
@@ -1655,30 +2050,43 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 桌面鱼缸状态
     // 梁文 + 高亮的峰/谷字（内容均为硬编码常量，无用户输入，用 DOM 方式避免 innerHTML）
     aqName.innerHTML = '';
-    aqName.appendChild(document.createTextNode('梁文'));
-    var aqHl = document.createElement('span'); aqHl.className = 'hl'; aqHl.textContent = peak ? '峰' : '谷';
+    aqName.appendChild(document.createTextNode(CFG.peakName.charAt(0) + CFG.peakName.charAt(1)));
+    var aqHl = document.createElement('span'); aqHl.className = 'hl'; aqHl.textContent = peak ? CFG.peakName.charAt(2) : CFG.offName.charAt(2);
     aqName.appendChild(aqHl);
     aqName.className = 'nm ' + (peak ? 'peak' : 'off');
+    // 面板标题 + 图例（从 CFG 动态设置）
+    if (panelTitle) {
+      panelTitle.innerHTML = '';
+      panelTitle.appendChild(document.createTextNode(CFG.peakName.charAt(0) + CFG.peakName.charAt(1)));
+      var ptHl = document.createElement('span'); ptHl.className = 'hl'; ptHl.textContent = CFG.peakName.charAt(2);
+      panelTitle.appendChild(ptHl);
+      panelTitle.appendChild(document.createTextNode(' & ' + CFG.offName.charAt(0) + CFG.offName.charAt(1)));
+      var ptHl2 = document.createElement('span'); ptHl2.className = 'hl'; ptHl2.textContent = CFG.offName.charAt(2);
+      panelTitle.appendChild(ptHl2);
+      panelTitle.appendChild(document.createTextNode(CFG.i18n.scheduleLabel));
+    }
+    if (lgPeak) lgPeak.textContent = CFG.peakName + ' ' + (Array.isArray(CFG.peakSegments) ? CFG.peakSegments.map(function(s){return s.join('-')}).join('/') : '');
+    if (lgOff) lgOff.textContent = CFG.offName + CFG.i18n.halfPriceLabel;
     aqua.className = 'aqua ' + (peak ? 'peak' : 'off');
-    aqPrice.textContent = '输入 ¥' + fmt(price) + ' / 输出 ¥' + fmt(priceOut);
+    aqPrice.textContent = CFG.i18n.inputLabel + ' ¥' + fmt(price) + ' / ' + CFG.i18n.outputLabel + ' ¥' + fmt(priceOut);
     // 鱼缸倒计时（简短）
     var ns = nextSwitchSec(p.d);
     var hh = Math.floor(ns / 3600), mm = Math.floor((ns % 3600) / 60), ss = ns % 60;
-    var toName = peak ? '梁文谷' : '梁文峰';
+    var toName = peak ? CFG.offName : CFG.peakName;
     aqNext.textContent = ns >= 3600
-      ? hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转' + toName
-      : pad2(mm) + ':' + pad2(ss) + ' 后转' + toName;
+      ? hh + ':' + pad2(mm) + ':' + pad2(ss) + CFG.i18n.switchToSuffix + toName
+      : pad2(mm) + ':' + pad2(ss) + CFG.i18n.switchToSuffix + toName;
     // 主题色（跟随主站 CSS 变量，不用硬编码）
-    fish.color = themeColor('--text', '#e6edf3');
-    fish.belly = themeColor('--text-secondary', '#8b949e');
-    fish.fin = themeColor('--text-tertiary', '#6e7681');
+    fish.color = themeColor('--text', CFG.ui.textColor);
+    fish.belly = themeColor('--text-secondary', CFG.ui.textSecondary);
+    fish.fin = themeColor('--text-tertiary', CFG.ui.textTertiary);
     fish.eyeColor = '#000';
-    fish.deadColor = themeColor('--text-tertiary', '#6e7681');
+    fish.deadColor = themeColor('--text-tertiary', CFG.ui.textTertiary);
 
     // 主题系统解析
     var _themeName = window.__AQUA_THEME__ || 'default';
     activeTheme = AQUA_THEMES[_themeName] || (window.AQUA_THEMES && window.AQUA_THEMES[_themeName]) || AQUA_THEMES['default'];
-    if (activeTheme.fishColor) fish.color = activeTheme.fishColor; else fish.color = themeColor('--text', '#e6edf3');
+    if (activeTheme.fishColor) fish.color = activeTheme.fishColor; else fish.color = themeColor('--text', CFG.ui.textColor);
     if (activeTheme.fishFin) fish.fin = activeTheme.fishFin; else fish.fin = null;    // 未配→纯色主体
     if (activeTheme.fishTail) fish.tail = activeTheme.fishTail; else fish.tail = null;
     if (activeTheme.fishBelly) fish.belly = activeTheme.fishBelly; else fish.belly = null;
@@ -1686,7 +2094,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     if (activeTheme.fishHighlight) fish.highlight = activeTheme.fishHighlight; else fish.highlight = null;
     if (activeTheme.deadColor) fish.deadColor = activeTheme.deadColor;
     if (activeTheme.waterRGB) waterRGB = activeTheme.waterRGB;
-    else waterRGB = hexToRgb(themeColor('--accent', '#58a6ff')); // 修 bug：主题无水色才回退 accent
+    else waterRGB = hexToRgb(themeColor('--accent', CFG.ui.accentColor)); // 修 bug：主题无水色才回退 accent
     // 水位 = 当前谷时段剩余比例（谷开始满水，谷结束水干）；峰=0 水干
     waterTarget = peak ? 0 : waterLevelFor(p);
     // 鱼状态：谷=活鱼，峰=随水干逐渐旱死（由水位驱动，见状态机；切换只做位置/过场）
@@ -1712,12 +2120,12 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 移动胶囊（回退样式）
     pill.className = 'pill ' + (peak ? 'peak' : 'off');
     pillIcon.innerHTML = peak ? ICON_PEAK : ICON_OFF;
-    pillLabel.textContent = peak ? '梁文峰' : '梁文谷';
-    pillPrice.textContent = '输入 ¥' + fmt(price) + ' / 输出 ¥' + fmt(priceOut);
+    pillLabel.textContent = peak ? CFG.peakName : CFG.offName;
+    pillPrice.textContent = CFG.i18n.inputLabel + ' ¥' + fmt(price) + ' / ' + CFG.i18n.outputLabel + ' ¥' + fmt(priceOut);
 
     // 面板状态
     statusEl.className = 'status ' + (peak ? 'peak' : 'off');
-    statusEl.textContent = peak ? '⛰ 梁文峰 · 高峰时段' : '🌙 梁文谷 · 空闲时段 (半价)';
+    statusEl.textContent = peak ? '⛰ ' + CFG.peakName + CFG.i18n.peakPeriodLabel : '🌙 ' + CFG.offName + CFG.i18n.offPeriodLabel;
     verEl.textContent = m.name + '-' + m.ver;
     var ch = peak ? m.cacheHit.peak : m.cacheHit.off;
     var cm = peak ? m.cacheMiss.peak : m.cacheMiss.off;
@@ -1738,10 +2146,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 
     // 倒计时（面板）
     nextEl.textContent = ns < 60
-      ? (peak ? '梁文谷 ' + ss + ' 秒后接棒，半价开抢！' : '梁文峰 ' + ss + ' 秒后上班，钱包快跑！')
+      ? (peak ? CFG.offName + ' ' + ss + CFG.i18n.countdownOffMsg : CFG.peakName + ' ' + ss + CFG.i18n.countdownPeakMsg)
       : ns < 3600
-        ? (peak ? '梁文谷再陪 ' + pad2(mm) + ':' + pad2(ss) : '梁文峰再榨 ' + pad2(mm) + ':' + pad2(ss))
-        : (peak ? hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转空闲' : hh + ':' + pad2(mm) + ':' + pad2(ss) + ' 后转高峰');
+        ? (peak ? CFG.offName + CFG.i18n.companionPrefixOff + pad2(mm) + ':' + pad2(ss) : CFG.peakName + CFG.i18n.companionPrefixPeak + pad2(mm) + ':' + pad2(ss))
+        : (peak ? hh + ':' + pad2(mm) + ':' + pad2(ss) + CFG.i18n.toOffSuffix : hh + ':' + pad2(mm) + ':' + pad2(ss) + CFG.i18n.toPeakSuffix);
 
     // 更新时间轴刻度线位置
     updateTimelineCursor();
@@ -1758,18 +2166,21 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     var now = Date.now();
     if (now - lastBlink < 4000) return;
     lastBlink = now;
-    var c = peak ? '#f0883e' : '#3fb950';
-    showToast(peak ? '⛰ 梁文峰上班了！' : '🌙 梁文谷接棒，半价开抢！', c);
+    var c = peak ? CFG.ui.warnColor : CFG.ui.accentColor;
+    showToast(peak ? '⛰ ' + CFG.peakName + CFG.i18n.switchAlertPeak : '🌙 ' + CFG.offName + CFG.i18n.switchAlertOff, c);
     panel.style.transition = 'box-shadow .2s, border-color .2s';
     panel.style.borderColor = c;
-    panel.style.boxShadow = '0 0 0 3px ' + c + '55, 0 12px 40px rgba(0,0,0,.5)';
+    panel.style.boxShadow = '0 0 0 3px ' + c + '55, 0 12px 40px ' + _pc('darkShadow','darkShadowAlpha');
     setTimeout(function () {
-      panel.style.borderColor = '#30363d';
-      panel.style.boxShadow = '0 12px 40px rgba(0,0,0,.5)';
+      panel.style.borderColor = CFG.ui.panelBorder;
+      panel.style.boxShadow = '0 12px 40px ' + _pc('darkShadow','darkShadowAlpha');
     }, 1800);
   }
 
-  // ---- 时间轴 ----
+  // ═══════════════════════════════════════════════════
+  // §16 时间轴
+  // ═══════════════════════════════════════════════════
+
   var tlCursor = null;
   function buildTimeline() {
     var isWk = isWeekendDay(new Date());
@@ -1790,9 +2201,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     });
     // 当前时间指示线（竖线+三角标记）
     tlCursor = document.createElement('div');
-    tlCursor.style.cssText = 'position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;z-index:10;pointer-events:none;transition:left .3s ease;box-shadow:0 0 4px rgba(255,255,255,.6)';
+    tlCursor.style.cssText = 'position:absolute;top:-3px;bottom:-3px;width:2px;background:' + CFG.ui.accentColor + ';z-index:10;pointer-events:none;transition:left .3s ease;box-shadow:0 0 4px ' + _pc('lightBg','lightBgAlpha');
     var tri = document.createElement('div');
-    tri.style.cssText = 'position:absolute;top:-5px;left:-4px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #fff';
+    tri.style.cssText = 'position:absolute;top:-5px;left:-4px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid ' + CFG.ui.accentColor;
     tlCursor.appendChild(tri);
     tlEl.style.position = 'relative';
     tlEl.appendChild(tlCursor);
@@ -1805,7 +2216,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     tlCursor.style.left = pct + '%';
   }
 
-  // ---- 交互 ----
+  // ═══════════════════════════════════════════════════
+  // §17 交互（面板/点击/悬停/关闭）
+  // ═══════════════════════════════════════════════════
+
   var open = false;
   // 面板定位：优先浮窗上方，空间不足翻下方；任何情况都不与浮窗重叠、
   // 不超出视口（高度按可用空间限制，内容可滚动）
@@ -1875,6 +2289,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
       burstBubbles(); addRipple(fish.x, fish.y);
       addFood(cx, cy);
     }
+    // 翻白（过食）期间：鱼不动，点击不投喂、不惊动
+    if (fish.state === 'float') return;
     var fdx = cx - fish.x, fdy = cy - fish.y;
     var fdist = Math.sqrt(fdx * fdx + fdy * fdy);
     if (fdist < 12 && !fish.dead && fish.state !== 'dying' && fish.state !== 'reviving' && fish.state !== 'float') {
@@ -1924,7 +2340,10 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   });
   remindSw.classList.toggle('on', remindOn);
 
-  // ---- 启动 ----
+  // ═══════════════════════════════════════════════════
+  // §18 启动
+  // ═══════════════════════════════════════════════════
+
   // 1) sessionStorage 有关闭标记 → 本次会话不再显示（重开浏览器=新会话=恢复）
   try {
     if (sessionStorage.getItem(CLOSE_KEY) === '1') {
