@@ -1345,6 +1345,23 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // === 干旱背景：沙漠风景（水位低时随 aridF 平滑浮现）===
     if (aridF > 0.05) {
       var ar = aridF;
+      // === 月亮计时（峰段进度：左侧升起→弧线→右侧落下，对应峰段时间）===
+      var _pMoon = nowParts();
+      var moonProg = -1;
+      for (var mpi = 0; mpi < PEAK_SEGMENTS.length; mpi++) {
+        var mseg = PEAK_SEGMENTS[mpi];
+        var mS = mseg[0] * 60, mE = mseg[1] * 60;
+        var mNow = _pMoon.h * 60 + _pMoon.m;
+        if (mNow >= mS && mNow < mE) { moonProg = (mNow - mS) / (mE - mS); break; }
+      }
+      if (moonProg >= 0 && ar > 0.3) {
+        var moonX = 10 + moonProg * (AQ_W - 20);
+        var moonY = 22 - Math.sin(moonProg * Math.PI) * 14;   // 弧线：左侧低(y=22)→顶(y=8)→右侧低
+        aqCtx.fillStyle = 'rgba(255,248,200,' + (0.7 * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(moonX, moonY, 4.5, 0, Math.PI * 2); aqCtx.fill();
+        aqCtx.fillStyle = 'rgba(255,248,200,' + (0.18 * ar) + ')';
+        aqCtx.beginPath(); aqCtx.arc(moonX, moonY, 10, 0, Math.PI * 2); aqCtx.fill();
+      }
       // 天空（暖黄渐变）
       var sky = aqCtx.createLinearGradient(0, 0, 0, AQ_H);
       sky.addColorStop(0, 'rgba(230,192,122,' + (0.32 * ar) + ')');
