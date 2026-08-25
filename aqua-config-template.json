@@ -84,7 +84,7 @@
     "eggWaterMin": 15,
     "overflowFeedCount": 50,
     "overflowWindow": 4000,
-    "overflowDuration": 720
+    "overflowDuration": 300
   },
   "activeTheme": "default",
   "themes": {
