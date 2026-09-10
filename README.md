@@ -54,6 +54,7 @@ systemctl --user restart dsh-web
 
 - **桌面端**（>768px）= 鱼缸陪伴模式；**移动端**（≤768px）= 胶囊模式自动回退
 - 浮窗可拖动，**永远不超出窗口**，面板**不与浮窗重叠**
+- **模型 tab 按配置动态生成** — 由 `models` 里的键动态渲染 tab（`flash`/`pro`/`vision`…），模型改名/新增/下线后**无需改代码**，tab 与面板标题自动用官方版本标签（`label`）与短名（`short`）显示
 - **跟随主站真实主题色**（CSS 变量映射），自动适配明暗主题
 - 鱼会好奇靠近鼠标，受惊时冲刺逃走；点水体投喂、点鱼身受惊
 - 死亡时嘴里冒出最后的气泡，复活时气泡爆发 + 庆祝冲刺
@@ -87,9 +88,9 @@ window.__AQUA_THEME__ = 'winter';
 ```html
 <script>
 window.AQUA_DEEPSEEK_CONFIG = {
-  models: { flash: { output: { off: 4.50, peak: 9.00 } } },  // 改价格
+  models: { flash: { output: { off: 4.00, peak: 8.00 } } },  // 改价格
   physics: { overflowFeedCount: 80 },                          // 4秒吃80粒才翻白
-  defaultModel: 'pro'
+  defaultModel: 'flash'
 };
 </script>
 <script src="deepseek-price-widget.js"></script>

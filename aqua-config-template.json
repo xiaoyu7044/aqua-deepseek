@@ -30,35 +30,55 @@
   ],
   "models": {
     "flash": {
-      "name": "DeepSeek-V4-Flash",
-      "ver": "0731",
+      "name": "DeepSeek-Flash",
+      "short": "V4.1-Flash",
+      "label": "DeepSeek-V4.1-Flash",
       "cacheHit": {
-        "off": 0.05,
-        "peak": 0.1
+        "off": 0.02,
+        "peak": 0.04
       },
       "cacheMiss": {
-        "off": 1.5,
-        "peak": 3.0
+        "off": 1.00,
+        "peak": 2.00
       },
       "output": {
-        "off": 4.5,
-        "peak": 9.0
+        "off": 4.00,
+        "peak": 8.00
       }
     },
     "pro": {
       "name": "DeepSeek-V4-Pro",
+      "short": "Pro",
       "ver": "0813",
+      "label": "DeepSeek-V4-Pro-0813",
       "cacheHit": {
         "off": 0.15,
-        "peak": 0.3
+        "peak": 0.30
       },
       "cacheMiss": {
-        "off": 4.5,
-        "peak": 9.0
+        "off": 4.50,
+        "peak": 9.00
       },
       "output": {
-        "off": 13.5,
-        "peak": 27.0
+        "off": 13.50,
+        "peak": 27.00
+      }
+    },
+    "vision": {
+      "name": "DeepSeek-V4-Flash-Vision-Exp",
+      "short": "Vision",
+      "legacy": true,
+      "cacheHit": {
+        "off": 0.02,
+        "peak": 0.04
+      },
+      "cacheMiss": {
+        "off": 1.00,
+        "peak": 2.00
+      },
+      "output": {
+        "off": 4.00,
+        "peak": 8.00
       }
     }
   },

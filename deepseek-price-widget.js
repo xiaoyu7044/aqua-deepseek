@@ -3,6 +3,9 @@
  * 高峰时段(梁文峰): 北京 9:00-12:00, 14:00-18:00 (仅周一至周五)
  * 空闲时段(梁文谷): 其余时间, 价格 = 高峰一半; 周六/周日全天为梁文谷
  * 2026-08-23: 周末全天半价
+ * 2026-09-10: 兜底默认价同步官网改版(V4.1-Flash 降价); 标题显示官方版本标签
+ * 2026-09-10: 模型 tab 改为按配置动态生成 —— 后端新增模型自动出现(补上 Vision 档)；
+ *   标签取 short 或 name+ver，长标签省略号(悬停见全名)；修复 ver 缺失时标题显示 -undefined
  * 2026-08-24: 陪伴式改造(方案C) — 桌面端=像素鱼缸：鱼只在水里游(自由
  *   游动/冒泡)，水位=谷时段剩余时间(谷开始水满、谷结束水干、峰时段水干
  *   鱼死翻白肚沉底，切换冒泡提醒)；水=主题蓝 + 呼吸波浪/流动光带动画；
@@ -44,17 +47,25 @@
     peakSegments: [[9, 12], [14, 18]],
     weekendOff: true,
     models: {
+      // 官网 2026-09-10 改版: deepseek-v4-flash → deepseek-flash(DeepSeek-V4.1-Flash)并降价
       flash: {
-        name: 'DeepSeek-V4-Flash', ver: '0731',
-        cacheHit: { off: 0.05, peak: 0.10 },
-        cacheMiss: { off: 1.50, peak: 3.00 },
-        output:    { off: 4.50, peak: 9.00 }
+        name: 'DeepSeek-Flash', short: 'V4.1-Flash', label: 'DeepSeek-V4.1-Flash',
+        cacheHit: { off: 0.02, peak: 0.04 },
+        cacheMiss: { off: 1.00, peak: 2.00 },
+        output:    { off: 4.00, peak: 8.00 }
       },
       pro: {
-        name: 'DeepSeek-V4-Pro', ver: '0813',
+        name: 'DeepSeek-V4-Pro', short: 'Pro', ver: '0813', label: 'DeepSeek-V4-Pro-0813',
         cacheHit: { off: 0.15, peak: 0.30 },
         cacheMiss: { off: 4.50, peak: 9.00 },
         output:    { off: 13.50, peak: 27.00 }
+      },
+      // 官网脚注: 旧名仍可调用, 由 V4.1-Flash 提供服务并按 Flash 计费
+      vision: {
+        name: 'DeepSeek-V4-Flash-Vision-Exp', short: 'Vision', legacy: true,
+        cacheHit: { off: 0.02, peak: 0.04 },
+        cacheMiss: { off: 1.00, peak: 2.00 },
+        output:    { off: 4.00, peak: 8.00 }
       }
     },
     defaultModel: 'flash',
@@ -277,6 +288,40 @@
       }
       if (ok) MODELS = cfg.models;
     }
+    try { buildTabs(); } catch (e) {}
+  }
+  // 模型 tab 标签：优先用后端下发的 short，否则 name 去掉 "DeepSeek-V4-" 前缀 + 版本号
+  function tabLabel(k, m) {
+    if (m && typeof m.short === 'string' && m.short) return m.short + (m.ver ? '-' + m.ver : '');
+    var n = String(m && m.name ? m.name : k).replace(/^DeepSeek-/, '');   // 保留版本号, 只去品牌前缀
+    return n + (m && m.ver ? '-' + m.ver : '');
+  }
+  // 按当前 MODELS 动态重建模型 tab（后端新增模型自动出现，不再写死）
+  function buildTabs() {
+    if (typeof shadow === 'undefined' || !shadow || !shadow.getElementById) return;
+    var box = shadow.getElementById('modelTabs'); if (!box) return;
+    var keys = Object.keys(MODELS); if (!keys.length) return;
+    if (keys.indexOf(currentModel) < 0) {
+      currentModel = (CFG.defaultModel && keys.indexOf(CFG.defaultModel) >= 0) ? CFG.defaultModel : keys[0];
+    }
+    box.className = 'tabs' + (keys.length > 2 ? ' many' : '');
+    box.innerHTML = '';
+    keys.forEach(function (k) {
+      var d = document.createElement('div');
+      var label = tabLabel(k, MODELS[k]);
+      d.className = 'tab' + (k === currentModel ? ' active' : '');
+      d.setAttribute('data-m', k);
+      d.textContent = label;
+      d.title = label;
+      d.addEventListener('click', function () {
+        var all = box.querySelectorAll('.tab');
+        for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+        d.classList.add('active');
+        currentModel = k;
+        render();
+      });
+      box.appendChild(d);
+    });
   }
   // 尝试从后端获取配置（官网价格/时段自动同步，前端有内置默认兜底）
   function fetchConfig() {
@@ -561,8 +606,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
 .status.peak{background:rgba(240,136,62,.14);color:var(--warn,#f0883e)}\
 .status.off{background:rgba(63,185,80,.13);color:var(--accent2,#3fb950)}\
 .tabs{display:flex;gap:6px;padding:10px 14px 0}\
-.tab{flex:1;text-align:center;padding:7px 0;border-radius:8px;border:1px solid var(--border,#30363d);cursor:pointer;font-size:12px;color:var(--text-secondary,#8b949e);transition:all .2s}\
+.tab{flex:1;min-width:0;text-align:center;padding:7px 0;border-radius:8px;border:1px solid var(--border,#30363d);cursor:pointer;font-size:12px;color:var(--text-secondary,#8b949e);transition:all .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
 .tab.active{color:var(--text,#e6edf3);border-color:var(--accent,#58a6ff);background:rgba(88,166,255,.08)}\
+.tabs.many .tab{font-size:11px;padding:6px 2px}\
 .price-box{padding:10px 14px 6px}\
 .prow{display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--border2,#21262d)}\
 .prow:last-child{border-bottom:none}\
@@ -620,10 +666,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     <span class="status" id="status">—</span>\
   </div>\
   <div class="motto" id="motto"></div>\
-  <div class="tabs">\
-    <div class="tab active" data-m="flash">Flash-0731</div>\
-    <div class="tab" data-m="pro">Pro-0813</div>\
-  </div>\
+  <div class="tabs" id="modelTabs"></div>\
   <div class="price-box">\
     <div class="prow"><span class="k">输入 · 缓存命中</span><span><span class="v" id="pCh"></span><span class="tag">元/百万tokens</span></span></div>\
     <div class="prow"><span class="k">输入 · 缓存未命中</span><span><span class="v" id="pCm"></span><span class="tag">元/百万tokens</span></span></div>\
@@ -2049,7 +2092,7 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
   function render() {
     var p = nowParts();
     var peak = isPeak(p.h, p.m, p.dow);
-    var m = MODELS[currentModel];
+    var m = MODELS[currentModel] || MODELS[Object.keys(MODELS)[0]];
     var price = peak ? m.cacheMiss.peak : m.cacheMiss.off;
     var priceOut = peak ? m.output.peak : m.output.off;
 
@@ -2132,7 +2175,9 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     // 面板状态
     statusEl.className = 'status ' + (peak ? 'peak' : 'off');
     statusEl.textContent = peak ? '⛰ ' + CFG.peakName + CFG.i18n.peakPeriodLabel : '🌙 ' + CFG.offName + CFG.i18n.offPeriodLabel;
-    verEl.textContent = m.name + '-' + m.ver;
+    var _vlabel = m.label || (m.name + (m.ver ? '-' + m.ver : ''));
+    verEl.textContent = _vlabel;
+    verEl.title = _vlabel;
     var ch = peak ? m.cacheHit.peak : m.cacheHit.off;
     var cm = peak ? m.cacheMiss.peak : m.cacheMiss.off;
     var out = peak ? m.output.peak : m.output.off;
@@ -2329,15 +2374,8 @@ box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;z-index:999999}\
     e.stopPropagation();
     closeWidget();
   });
-  // 模型切换
-  shadow.querySelectorAll('.tab').forEach(function (t) {
-    t.addEventListener('click', function () {
-      shadow.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('active'); });
-      t.classList.add('active');
-      currentModel = t.getAttribute('data-m');
-      render();
-    });
-  });
+  // 模型切换（动态生成，见 buildTabs）
+  buildTabs();
   // 提醒开关
   remindSw.addEventListener('click', function () {
     remindOn = !remindOn;

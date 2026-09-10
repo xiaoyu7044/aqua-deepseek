@@ -36,7 +36,7 @@
 ```html
 <script>
 window.AQUA_DEEPSEEK_CONFIG = {
-  defaultModel: 'pro',                    // 默认模型
+  defaultModel: 'flash',                    // 默认模型
   physics: { overflowFeedCount: 80 },      // 4秒吃80粒才翻白
   peakName: '梁文峰', offName: '梁文谷',
   models: {
@@ -296,7 +296,7 @@ window.AQUA_DEEPSEEK_CONFIG = {
 |---|---|---|---|
 | 1 | `peakSegments` | 高峰时段 | `[[9,12],[14,18]]` 每日高峰 |
 | 2 | `weekendOff` | 周末是否全天半价 | `true/false` |
-| 3 | `models` | 模型与价格 | `flash`/`pro`，各含 `cacheHit/cacheMiss/output`（off/peak 双价） |
+| 3 | `models` | 模型与价格 | 键即模型 ID（`flash`/`pro`/`vision`…），各含 `cacheHit/cacheMiss/output`（off/peak 双价）；可选 `short`（tab 短名）、`label`（面板官方版本标签）、`legacy:true`（官网已下线但旧名仍可调用的别名，沿用被指向模型价格）。**tab 由键动态生成**，增删模型无需改代码 |
 | 4 | `defaultModel` | 默认模型 | `'flash'`/`'pro'` |
 | 5 | `peakName`/`offName` | 双人格名 | 梁文峰/梁文谷 |
 | 6 | `peakMottos`/`offMottos` | 切换调侃文案 | 字符串数组 |
